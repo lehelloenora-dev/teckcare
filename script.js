@@ -1568,7 +1568,7 @@
 /* Bouton « Voir nos produits » de l'en-tête : mesure du clic */
 document.addEventListener('click', function (e) {
   var a = e.target.closest && e.target.closest('[data-buy-cta]'); if (!a) return;
-  try { if (window.tcTrack) window.tcTrack('cta_click', { cta: 'header_buy', label: 'Voir nos produits' }); } catch (x) {}
+  try { if (window.tcTrack) window.tcTrack('cta_click', { cta: 'header_buy', label: 'Acheter' }); } catch (x) {}
 });
 
 /* Club TeckCare : inscription à la lettre (enregistrée localement tant qu'aucun service d'envoi n'est branché) */
