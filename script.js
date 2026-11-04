@@ -506,7 +506,8 @@
       '<h1>' + (n ? 'La ration de ' + esc(n) : 'Fiche de ration') + '</h1><p>TeckCare · croquettes pour chiots teckels</p>' +
       '<p>' + c.age + ' mois · ' + fmtWeight(c.weight) + ' kg' + (shapeLbl ? ' · repère de silhouette : ' + esc(shapeLbl) : '') + '</p>' +
       '<p class="big">' + r.grams + ' g <small style="font-size:1.2rem">/ jour</small></p><p>' + mealsTxt(r.grams, r.meals).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') + '.</p>' +
-      '<h2>Durée estimée d’un sac</h2><table>' + rows + '</table>' +
+      (calc.po && calc.pateSel ? '<p>Les jours avec ' + esc(calc.po.k.label.toLowerCase()) + ' (' + esc(calc.po.x.label) + ') : ' + calc.po.rest + ' g de croquettes + 1 ' + calc.po.unit + '. La pâtée remplace une partie des croquettes, elle ne s’ajoute pas.</p>' : '') +
+      '<h2>Durée estimée d’un sac (en croquettes seules)</h2><table>' + rows + '</table>' +
       '<p class="warn">Estimation indicative : elle ne remplace pas l’avis de votre vétérinaire. Pesez votre chiot chaque semaine et ajustez.</p>' +
       '<p style="font-size:.85rem;color:#675548">Fiche créée le ' + new Date().toLocaleDateString('fr-FR') + '.</p></html>';
     var url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
@@ -580,21 +581,45 @@
     if (hi === lo) return '<b>' + m + ' repas</b> de <b>' + hi + '&nbsp;g</b>';
     return '<b>' + m + ' repas</b>&nbsp;: ' + nHi + ' de ' + hi + '&nbsp;g et ' + (m - nHi) + ' de ' + lo + '&nbsp;g';
   }
-  /* Sac du résultat : image, prix, durée, ajout au panier, fiche et rappel suivent le format choisi */
+  /* Résultat : combinaison conseillée (sac + complément facultatif), puis ration correspondante, puis suites */
   function renderResBag() {
-    var c = calc.result, box = $('#sr-bag'); if (!c || !box) return;
-    var f = fmtById(calc.resFmt) || c.rec, d = bagDays(f, c.r.grams), nm = pupName();
-    box.innerHTML = '<div class="fx-imgs fp-imgs"><img class="fx-img-bag" src="' + BASE + 'assets/pack/photo/bag' + f.kg + '-front.webp" alt="Sac de croquettes Poulet & Saumon ' + esc(f.label) + '"></div>' +
-      '<div class="fp-info">' +
-      '<p class="fp-k">🍽️ ' + (f.id === c.rec.id ? (nm ? 'Le sac conseillé pour ' + esc(nm) : 'Le sac conseillé') : 'Votre format') + '</p>' +
-      '<h4 class="fx-name" id="sr-bag-t">Croquettes Poulet &amp; Saumon · ' + esc(f.label) + '</h4>' +
-      '<p class="fx-v">Environ <b>' + d + '&nbsp;jours</b> avec sa ration actuelle (estimation).</p>' +
-      '<div class="fp-buy"><span class="fx-seg fx-fmt" role="group" aria-label="Format du sac">' + FORMATS.map(function (g) { return '<button type="button" data-sr-fmt="' + g.id + '" aria-pressed="' + (g.id === f.id) + '">' + esc(g.label) + '</button>'; }).join('') + '</span>' +
-      '<span class="fp-why">Le format dont la durée se rapproche le plus d’un mois avec sa ration' + (f.id === c.rec.id ? '' : '&nbsp;: le ' + esc(c.rec.label)) + '.</span></div>' +
-      '<div class="fp-foot"><p class="fp-price"><b>' + eur(f.price) + '</b></p><button type="button" class="btn btn--primary fx-go" data-sr-add="' + f.id + '">Ajouter au panier</button></div>' +
-      '<p class="res-added" role="status" aria-live="polite"></p></div>';
+    var c = calc.result; if (!c) return;
+    var f = fmtById(calc.resFmt) || c.rec, d = bagDays(f, c.r.grams), po = calc.po, sel = !!(po && calc.pateSel);
+    var nomade = po && po.id === 'pate-nomade-100g';
+    var combo = $('#sr-combo');
+    if (combo) {
+      var total = f.price + (sel ? po.x.price : 0);
+      combo.innerHTML = '<h4 class="sr-combo-t" id="sr-combo-t">Voici ce que nous vous conseillons pour ses repas</h4>' +
+        '<div class="sr-combo-g' + (po ? '' : ' is-solo') + '">' +
+        '<article class="sr-p sr-p--bag"><img class="sr-p-img" src="' + BASE + 'assets/pack/photo/bag' + f.kg + '-front.webp" alt="Sac de croquettes TeckCare Poulet & Saumon ' + esc(f.label) + '">' +
+        '<div class="sr-p-c"><p class="sr-p-k">' + (f.id === c.rec.id ? 'Sac conseillé · la base de ses repas' : 'Votre format · la base de ses repas') + '</p>' +
+        '<p class="sr-p-n">Croquettes Poulet &amp; Saumon</p>' +
+        '<span class="fx-seg fx-fmt" role="group" aria-label="Format du sac">' + FORMATS.map(function (g) { return '<button type="button" data-sr-fmt="' + g.id + '" aria-pressed="' + (g.id === f.id) + '">' + esc(g.label) + '</button>'; }).join('') + '</span>' +
+        '<p class="sr-p-pr"><b>' + eur(f.price) + '</b></p>' +
+        '<p class="sr-p-w">' + (f.id === c.rec.id ? 'Avec sa ration, le ' + esc(f.label) + ' est le format dont la durée se rapproche le plus d’un mois&nbsp;: environ ' + d + '&nbsp;jours en croquettes seules.' : 'Environ ' + d + '&nbsp;jours en croquettes seules. Le format conseillé, le plus proche d’un mois, est le ' + esc(c.rec.label) + '.') + '</p>' +
+        '<button type="button" class="btn btn--text btn--sm" data-sr-add="' + f.id + '">Ajouter seulement le sac</button></div></article>' +
+        (po ? '<article class="sr-p sr-p--pate' + (sel ? '' : ' is-off') + '"><p class="sr-p-opt">Complément facultatif</p><img class="sr-p-img" src="' + BASE + po.x.img + '" alt="' + esc(po.x.name + ' ' + po.x.label) + '">' +
+          '<div class="sr-p-c"><p class="sr-p-n">' + esc(po.k.label) + ' · ' + esc(po.x.label) + '</p><p class="sr-p-pr"><b>' + eur(po.x.price) + '</b> ' + (nomade ? 'la gourde' : 'la barquette') + '</p>' +
+          '<p class="sr-p-w">' + (nomade ? 'Il vous accompagne souvent en sortie ou en voyage&nbsp;: une gourde prête à servir, à emporter.' : 'Pour varier ses repas&nbsp;: à mélanger à ses croquettes, de temps en temps ou régulièrement.') + '</p>' +
+          '<button type="button" class="btn btn--text btn--sm" data-sr-pate-toggle aria-pressed="' + sel + '">' + (sel ? 'Retirer de la sélection' : 'Remettre dans la sélection') + '</button></div></article>' : '') +
+        '</div>' +
+        '<div class="sr-combo-f"><button type="button" class="btn btn--primary btn--lg" data-sr-addsel>Ajouter la sélection au panier · ' + eur(total) + '</button>' +
+        '<span class="sr-combo-n">' + (sel ? '1 sac de ' + esc(f.label) + ' + 1 ' + (nomade ? 'gourde' : 'barquette') : '1 sac de ' + esc(f.label)) + ' · hors livraison</span>' +
+        '<p class="res-added" role="status" aria-live="polite"></p></div>';
+    }
+    var rat = $('#sr-rat');
+    if (rat) {
+      var unit = nomade ? 'gourde' : 'barquette';
+      rat.innerHTML = sel
+        ? '<p class="sr-k">Sa ration</p><div class="sr-days">' +
+          '<div><p class="sr-day-t">Les jours ' + (nomade ? 'de sortie avec pâtée' : 'avec pâtée') + '</p><p class="sr-day-v"><b>' + po.rest + '&nbsp;g</b> de croquettes + <b>1 ' + unit + '</b> (' + esc(po.x.label) + ')</p><p class="sr-day-m">' + mealsTxt(po.rest, c.r.meals) + '</p></div>' +
+          '<div><p class="sr-day-t">Les jours sans pâtée</p><p class="sr-day-v"><b>' + c.r.grams + '&nbsp;g</b> de croquettes</p><p class="sr-day-m">' + mealsTxt(c.r.grams, c.r.meals) + '</p></div></div>' +
+          '<p class="sr-note">La pâtée remplace une partie des croquettes (1 ' + unit + ' ≈ ' + po.eq + '&nbsp;g de croquettes en énergie)&nbsp;: elle ne s’ajoute pas à la ration complète.</p>'
+        : '<p class="sr-k">Sa ration</p><p class="fs-big"><b>' + c.r.grams + '&nbsp;g</b> par jour</p><p class="fs-meals">' + mealsTxt(c.r.grams, c.r.meals) + '</p>';
+      rat.innerHTML += '<p class="fx-sec">Ration quotidienne estimée, à ajuster avec <span class="nw"><a href="#veterinaires" class="step-link" data-vet-link>notre vétérinaire partenaire</a>.</span></p>';
+    }
     var rem = $('#sr-rem');
-    if (rem) rem.innerHTML = '<span class="fs-cal" aria-hidden="true">📅</span><p>Son sac de ' + esc(f.label) + ' dure environ <b>' + d + '&nbsp;jours</b>. Recevez un rappel cinq jours avant la fin.</p>' +
+    if (rem) rem.innerHTML = '<span class="fs-cal" aria-hidden="true">📅</span><p>Sac de ' + esc(f.label) + '&nbsp;: environ <b>' + d + '&nbsp;jours</b>, estimés en croquettes seules (' + c.r.grams + '&nbsp;g par jour)' + (sel ? '&nbsp;; chaque jour avec pâtée le prolonge un peu' : '') + '. Le rappel arrive cinq jours avant.</p>' +
       '<span class="fs-rem-a"><button type="button" class="btn btn--ghost" data-open-reminder>Créer mon rappel</button><button type="button" class="btn btn--text" data-sheet>Télécharger sa fiche</button></span>';
   }
   function showResult(age, w, shape) {
@@ -650,35 +675,26 @@
         : 'Demandez l’avis d’un vétérinaire avant de changer son alimentation.';
     var silRow = '<div class="fx-sil fx-silrow fx-sil--' + tier + '"><img src="' + BASE + 'assets/bcs/' + SIL.pic + '.webp" alt="" width="520" height="260"><p><span class="fx-sil-k">Repère indicatif d’après vos réponses</span><b>' + SIL.lbl + '</b> · ' + silTip + '</p></div>';
 
-    /* Un seul complément : nomade si sorties ou voyages fréquents, sinon gourmande. Rien n'est ajouté ni présélectionné. */
+    /* Un seul complément : nomade si sorties ou voyages fréquents, sinon gourmande. Facultatif, rien n'est ajouté automatiquement. */
     var popts = pateOptions(r.grams), pk = calc.travel === 'souvent' ? 'pate-nomade-100g' : 'pate-gourmande-80g';
-    var po = popts.filter(function (o) { return o.id === pk; })[0];
-    var extra = !po ? '' :
-      '<section class="fx-extra" aria-labelledby="fx-extra-t"><img src="' + BASE + po.x.img + '" alt="" width="120" height="150" loading="lazy">' +
-      '<div><p class="fx-extra-k" id="fx-extra-t">Pour compléter sa gamelle</p>' +
-      '<p class="fx-extra-n"><b>' + esc(po.k.label) + ' ' + esc(po.x.label) + '</b> · ' + eur(po.x.price) + '</p>' +
-      '<p class="fx-extra-w">' + (pk === 'pate-nomade-100g' ? 'Il vous accompagne souvent en sortie ou en voyage&nbsp;: une gourde prête à servir, facile à emporter.' : 'À mélanger à ses croquettes, de temps en temps ou plus régulièrement, pour varier ses repas.') +
-      ' Le jour où il en mange une, retirez environ <b>' + po.eq + '&nbsp;g</b> de croquettes.</p></div>' +
-      '<div class="fx-extra-a"><button type="button" class="btn btn--ghost btn--sm" data-sr-pate="' + po.id + '">Ajouter</button><p class="res-added" role="status" aria-live="polite"></p></div></section>';
+    calc.po = popts.filter(function (o) { return o.id === pk; })[0] || null; calc.pateSel = !!calc.po;
 
     var title = nm ? 'La gamelle de <span class="js-pup">' + esc(nm) + '</span>' : 'Sa gamelle';
     var html =
-      '<div class="result fx fx-sheet">' +
+      '<div class="result fx fx-sheet sr2">' +
       '<header class="fs-head"><h3 class="result-title">' + title + '</h3>' +
       '<p class="fs-prof">' + age + '&nbsp;mois · ' + fmtWeight(w) + '&nbsp;kg' + (calc.variety && VAR[calc.variety] ? ' · Teckel ' + VAR[calc.variety] : '') + ' · <button type="button" class="btn btn--text fx-edit" data-edit-recap>Modifier</button></p></header>' +
-      '<section class="fs-main" aria-label="Sa ration">' +
+      '<section class="sr-combo" id="sr-combo" aria-labelledby="sr-combo-t"></section>' +
+      '<section class="fs-main sr-ration" aria-label="Sa ration">' +
       '<div class="bowl-stage bowl-stage--img res-bowl fs-bowl" data-grams="' + r.grams + '" aria-hidden="true">' +
       '<img class="bowl-img" src="' + BASE + 'assets/bowl-full.webp" width="560" height="329" alt="">' +
       '<div class="bowl-pile"></div>' +
       '<svg class="bowl-label" viewBox="0 0 560 329" aria-hidden="true"><path id="bowl-arc-res" d="M60 160 Q280 234 500 160" fill="none"/><text text-anchor="middle"><textPath href="#bowl-arc-res" startOffset="50%">' + esc((nm || 'Sa gamelle').toUpperCase()) + '</textPath></text></svg></div>' +
-      '<div class="fs-rat"><p class="fs-big"><b>' + r.grams + '&nbsp;g</b> par jour</p>' +
-      '<p class="fs-meals">' + mealsTxt(r.grams, r.meals) + '</p>' +
-      '<p class="fx-sec">Ration quotidienne estimée, à ajuster avec <span class="nw"><a href="#veterinaires" class="step-link" data-vet-link>notre vétérinaire partenaire</a>.</span></p></div>' +
+      '<div class="fs-rat" id="sr-rat"></div>' +
       '</section>' +
       silRow +
-      '<section class="fx-menu fp" id="sr-bag" aria-labelledby="sr-bag-t"></section>' +
       '<section class="fs-rem" id="sr-rem" aria-live="polite"></section>' +
-      extra +
+      '<p class="sr-gift">🎁 Un bilan de croissance offert après votre première commande, chez une clinique partenaire TeckCare, quelle que soit sa silhouette. <a href="#veterinaires" class="step-link">Mon véto</a></p>' +
       '<details class="result-how fx-acc"><summary>Sa silhouette</summary>' +
       '<p class="fx-sil-t">' + silTxt + ' Ce repère vient de vos réponses aux trois questions&nbsp;: ce n’est pas un diagnostic et il ne modifie pas la ration estimée.</p>' + advice.replace(/^<p class="res-sil[^>]*>[\s\S]*?<\/p>/, '') + vetBlock + '</details>' +
       '<details class="result-how fx-acc"><summary>Comprendre le résultat</summary>' +
@@ -688,7 +704,7 @@
       '<li><span class="fx-how-i" aria-hidden="true">🥣</span><p><b>Dans sa gamelle</b>Converti en croquettes, cela fait ' + r.grams + '&nbsp;g par jour.</p></li>' +
       '</ol>' +
       '<p class="fx-how-n">Seuls son poids et son âge entrent dans le calcul. Sa variété et sa silhouette servent à adapter nos conseils.</p>' +
-      (popts.length ? '<p class="fx-how-n">Une pâtée remplace une partie des croquettes à calories égales&nbsp;: ' + popts.map(function (o) { return '1 ' + o.unit + ' = ' + o.eq + '&nbsp;g'; }).join(', ') + '. Votre rappel reste calculé sur sa ration en croquettes seules.</p>' : '') +
+      (popts.length ? '<p class="fx-how-n">Une pâtée remplace une partie des croquettes à énergie égale&nbsp;: ' + popts.map(function (o) { return '1 ' + o.unit + ' = ' + o.eq + '&nbsp;g de croquettes'; }).join(', ') + '. La durée du sac et le rappel sont estimés en croquettes seules, car la fréquence des pâtées varie.</p>' : '') +
       '<p class="fx-how-n">Pesez-le chaque semaine&nbsp;: sa ration évolue avec lui.</p></details>' +
       '<div class="result-links"><button type="button" class="btn btn--text" data-edit>← Retour</button></div>' +
       '</div>';
@@ -1065,9 +1081,17 @@
       var adb = t.closest('[data-adult]');
       if (adb) { var am = $('#age-adult-msg'), op = am.hidden; am.hidden = !op; adb.setAttribute('aria-expanded', String(op)); if (op) track('calculator_adult_info', {}); return; }
       var srf = t.closest('[data-sr-fmt]');
-      if (srf) { var fid = srf.getAttribute('data-sr-fmt'); setResFormat(fid); renderResBag(); track('formula_chosen', { format: fid, from: 'result' }); var nb = $('#sr-bag [data-sr-fmt="' + fid + '"]'); if (nb) nb.focus(); return; }
+      if (srf) { var fid = srf.getAttribute('data-sr-fmt'); setResFormat(fid); renderResBag(); track('formula_chosen', { format: fid, from: 'result' }); var nb = $('#sr-combo [data-sr-fmt="' + fid + '"]'); if (nb) nb.focus(); return; }
+      if (t.closest('[data-sr-pate-toggle]')) { calc.pateSel = !calc.pateSel; renderResBag(); track('result_complement_toggle', { selected: calc.pateSel, item: calc.po && calc.po.id }); var tg = $('#sr-combo [data-sr-pate-toggle]'); if (tg) tg.focus(); return; }
+      var srs = t.closest('[data-sr-addsel]');
+      if (srs) {
+        var sf = fmtById(calc.resFmt) || calc.result.rec, withP = !!(calc.po && calc.pateSel);
+        addToCart(sf.id, 1, 'result_selection', true); if (withP) addToCart(calc.po.id, 1, 'result_selection', true);
+        var m0 = $('#sr-combo .sr-combo-f .res-added'); if (m0) m0.innerHTML = '✓ Ajouté au panier&nbsp;: 1 sac de ' + esc(sf.label) + (withP ? ' et 1 ' + esc(calc.po.k.label.toLowerCase()) : '') + '. <button type="button" class="btn btn--text btn--sm" data-res-cart>Voir le panier</button>';
+        track('result_selection_added', { format: sf.id, complement: withP ? calc.po.id : 'none' }); return;
+      }
       var sra = t.closest('[data-sr-add]');
-      if (sra) { var af = fmtById(sra.getAttribute('data-sr-add')); addToCart(af.id, 1, 'result_bag', true); var m1 = $('#sr-bag .res-added'); if (m1) m1.innerHTML = '✓ Sac de ' + esc(af.label) + ' ajouté au panier. <button type="button" class="btn btn--text btn--sm" data-res-cart>Voir le panier</button>'; return; }
+      if (sra) { var af = fmtById(sra.getAttribute('data-sr-add')); addToCart(af.id, 1, 'result_bag', true); var m1 = $('#sr-combo .sr-combo-f .res-added'); if (m1) m1.innerHTML = '✓ Sac de ' + esc(af.label) + ' ajouté au panier. <button type="button" class="btn btn--text btn--sm" data-res-cart>Voir le panier</button>'; return; }
       var srp = t.closest('[data-sr-pate]');
       if (srp) { var pf = fmtById(srp.getAttribute('data-sr-pate')); addToCart(pf.id, 1, 'result_complement', true); var m2 = srp.parentNode.querySelector('.res-added'); if (m2) m2.innerHTML = '✓ ' + esc(pf.name) + ' ajoutée au panier. <button type="button" class="btn btn--text btn--sm" data-res-cart>Voir le panier</button>'; return; }
       var mxb = t.closest('[data-mix]'); if (mxb) { setMix(mxb.getAttribute('data-mix')); return; }
