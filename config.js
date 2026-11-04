@@ -24,7 +24,7 @@ window.TECKCARE_CONFIG = {
                  qu'après « Accepter ».
      debugMode : true force le panneau de debug et le mode DebugView de GA4. */
   analytics: {
-    measurementId: "",      // ex. "G-AB12CD34EF"
+    measurementId: "G-F3EGNJW3NB",
     debugMode: false,
     activationTarget: 0.30  // hypothèse : 30 % d'activation
   },
