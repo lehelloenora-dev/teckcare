@@ -719,8 +719,9 @@
 
     // ÉVÉNEMENT : le résultat valide est effectivement affiché à l'écran
     document.dispatchEvent(new CustomEvent('tc:result', { detail: { grams: r.grams, age: age } }));
-    track('recommendation_shown', { water: calc.water || 'nsp', activity: calc.activity || 'calme', tier: tier, body_condition_score: b, recommended_format: rec.label });
-    track('calculator_completed', { age_months: age, weight_kg: w, silhouette: shape, body_condition_score: calc.bcs || null, ration_g: r.grams, meals_per_day: r.meals, recommended_format: rec.label });
+    /* Mesure : envoyée seulement si le résultat est réellement à l'écran (fiche rendue et visible), sans aucune donnée saisie */
+    var shown = !box.hidden && !!$('#sr4 .sr4-big', box) && box.getBoundingClientRect().height > 0;
+    if (shown) { track('recommendation_shown', { recommended_format: rec.label }); track('calculator_completed'); }
 
     selectedFormat = calc.resFmt;
     refreshProduct();
