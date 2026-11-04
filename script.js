@@ -1422,20 +1422,78 @@ document.addEventListener('click', function (e) {
 /* Club TeckCare : inscription à la lettre (enregistrée localement tant qu'aucun service d'envoi n'est branché) */
 (function () {
   var form = document.getElementById('club-form'); if (!form) return;
-  var msg = document.getElementById('club-msg');
-  var dog = document.getElementById('club-dog'), src = document.getElementById('pup-name') || document.getElementById('hero-name');
-  if (dog && src && src.value) dog.value = src.value;
+  var msg = document.getElementById('club-msg'), dog = document.getElementById('club-dog');
+  var cpRow = document.getElementById('club-cp-row'), cp = document.getElementById('club-cp'), ageP = document.getElementById('club-age');
+  function track(n, p) { try { if (window.tcTrack) window.tcTrack(n, p || {}); } catch (x) {} }
+  function getJ(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (x) { return null; } }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  /* Âge actuel estimé à partir du calculateur : âge saisi + mois écoulés depuis */
+  function ageNow() {
+    var r = getJ('tc_ration'); if (!r || !r.age) return null;
+    var m = r.age + (r.ts ? Math.floor((Date.now() - r.ts) / (30.44 * 864e5)) : 0);
+    return m;
+  }
+  function known() {
+    var i = document.getElementById('pup-name'), n = (i && i.value) || getJ('tc_name') || '';
+    return { name: String(n || '').trim(), age: ageNow() };
+  }
+  function prefill() {
+    var k = known();
+    if (k.name && !dog.value) dog.value = k.name;
+    var who = document.getElementById('club-letter-who'); if (who) who.textContent = k.name || 'Votre chiot';
+    if (k.age) { ageP.hidden = false; ageP.innerHTML = '🎂 Sa lettre sera adaptée à son âge&nbsp;: <b>' + (k.age >= 24 ? Math.floor(k.age / 12) + '&nbsp;ans' : k.age + '&nbsp;mois') + '</b> (d’après le calculateur).'; }
+    else ageP.hidden = true;
+  }
+  prefill();
+  document.addEventListener('tc:ration', prefill);
+  var club = document.getElementById('club');
+  if (club && 'MutationObserver' in window) new MutationObserver(function () { if (!club.hidden) prefill(); }).observe(club, { attributes: true, attributeFilter: ['hidden'] });
+
+  function syncCp() { var on = form.querySelector('input[value="rencontres"]').checked; cpRow.hidden = !on; }
+  form.addEventListener('change', function (e) { if (e.target.name === 'club-int') syncCp(); });
+  syncCp();
+
   form.addEventListener('submit', function (e) {
     e.preventDefault();
-    var email = form.querySelector('#club-email').value.trim(), ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    if (!ok) { msg.textContent = 'Indiquez une adresse e-mail valide.'; return; }
-    if (!form.querySelector('#club-consent').checked) { msg.textContent = 'Cochez la case pour accepter de recevoir la lettre du club.'; return; }
+    var email = form.querySelector('#club-email').value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg.textContent = 'Indiquez une adresse e-mail valide.'; form.querySelector('#club-email').focus(); return; }
     var ints = [].slice.call(form.querySelectorAll('input[name="club-int"]:checked')).map(function (i) { return i.value; });
-    var rec = { email: email, dog: (dog.value || '').trim(), cp: (form.querySelector('#club-cp').value || '').trim(), interests: ints, ts: new Date().toISOString() };
+    if (!ints.length) { msg.textContent = 'Choisissez au moins un centre d’intérêt.'; return; }
+    var c = (cp.value || '').trim();
+    if (ints.indexOf('rencontres') > -1 && !/^\d{5}$/.test(c)) { msg.textContent = 'Indiquez votre code postal à 5 chiffres pour recevoir les rencontres près de chez vous.'; cp.focus(); return; }
+    if (!form.querySelector('#club-consent').checked) { msg.textContent = 'Cochez la case pour accepter de recevoir la lettre du club.'; return; }
+    var k = known(), rec = { email: email, dog: (dog.value || '').trim(), cp: ints.indexOf('rencontres') > -1 ? c : '', interests: ints, age: k.age || null, ts: new Date().toISOString() };
     try { localStorage.setItem('tc_club', JSON.stringify(rec)); } catch (x) {}
-    try { if (window.tcTrack) window.tcTrack('newsletter_signup', { interests: ints.join(','), has_dog_name: !!rec.dog }); } catch (x) {}
-    msg.textContent = 'Inscription enregistrée. Bienvenue au club' + (rec.dog ? ', ' + rec.dog : '') + ' !';
-    form.querySelector('button[type="submit"]').disabled = true;
+    track('newsletter_signup', { interests: ints.join(','), has_dog_name: !!rec.dog, age_known: !!rec.age });
+    track('club_signup_complete', { interests: ints.join(','), age_known: !!rec.age });
+    var nm = rec.dog ? esc(rec.dog) + ' et vous' : 'vous deux';
+    form.innerHTML = '<div class="club-done" tabindex="-1"><p class="club-done-i" aria-hidden="true">🐾</p><h3>Bienvenue au club, ' + nm + '&nbsp;!</h3>' +
+      '<p>Votre première lettre arrive à <b>' + esc(email) + '</b>.</p>' +
+      '<ul class="club-prefs"><li>Centres d’intérêt&nbsp;: ' + ints.map(function (i) { return i === 'conseils' ? 'les conseils' : 'les rencontres'; }).join(' et ') + '</li>' +
+      (rec.cp ? '<li>Rencontres autour de ' + esc(rec.cp) + '</li>' : '') +
+      (rec.age ? '<li>Lettre adaptée à ses ' + rec.age + '&nbsp;mois</li>' : '') + '</ul>' +
+      (rec.age ? '' : '<div class="club-bd"><label for="club-bd">Son mois de naissance <small>(pour une lettre adaptée à son âge)</small></label><span><input type="month" id="club-bd" max="' + new Date().toISOString().slice(0, 7) + '"><button type="button" class="btn btn--ghost btn--sm" data-club-bd>Enregistrer</button></span><p class="club-help" id="club-bd-msg" role="status"></p></div>') +
+      '<div class="club-next"><a class="btn btn--primary btn--sm" href="#conseils" data-club-link="conseils">Lire nos articles</a>' +
+      (rec.interests.indexOf('rencontres') > -1 ? '<a class="btn btn--ghost btn--sm" href="#club" data-club-link="rencontres" data-club-walk>Voir comment se passent les balades</a>' : '<a class="btn btn--ghost btn--sm" href="#sante" data-club-link="veto">Trouver un vétérinaire</a>') + '</div></div>';
+    var d = form.querySelector('.club-done'); if (d) d.focus();
+  });
+
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('[data-club-link]');
+    if (a) {
+      var done = !!a.closest('.club-done');
+      track(a.getAttribute('data-club-link') === 'rencontres' ? 'club_events_click' : 'club_content_click', { target: a.getAttribute('data-club-link'), from: done ? 'confirmation' : 'apercu', href: a.getAttribute('href') });
+      if (a.hasAttribute('data-club-walk')) { e.preventDefault(); var w = document.querySelector('.club-walk'); if (w) { w.scrollIntoView({ block: 'center', behavior: 'smooth' }); w.classList.add('is-hi'); setTimeout(function () { w.classList.remove('is-hi'); }, 1600); } }
+    }
+    if (e.target.closest && e.target.closest('[data-club-bd]')) {
+      var v = (document.getElementById('club-bd') || {}).value, out = document.getElementById('club-bd-msg');
+      if (!v) { out.textContent = 'Choisissez un mois.'; return; }
+      var p = v.split('-'), now = new Date(), m = (now.getFullYear() - +p[0]) * 12 + now.getMonth() + 1 - +p[1];
+      if (m < 0 || m > 240) { out.textContent = 'Vérifiez la date.'; return; }
+      var rec = getJ('tc_club') || {}; rec.birth = v; rec.age = m; try { localStorage.setItem('tc_club', JSON.stringify(rec)); } catch (x) {}
+      out.textContent = 'C’est noté : sa lettre suivra ses ' + m + ' mois.';
+      track('club_birthdate_added', { age_months: m });
+    }
   });
 })();
 

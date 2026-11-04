@@ -3332,3 +3332,52 @@ main [id]{scroll-margin-top:calc(var(--top,80px) + 18px)}
   #vd-offer .vd-offer-a{grid-column:1/-1}
   #vd-offer .vd-offer-btn{width:100%;justify-content:center;white-space:normal}
 }
+/* Club TeckCare (refonte) */
+.club .club-cont{margin:10px 0 0;font:600 .95rem/1.4 var(--display);color:var(--pista-d)}
+.club-photo{margin:0 0 18px;border-radius:var(--r-l);overflow:hidden;box-shadow:0 24px 44px -30px rgba(74,36,16,.6)}
+.club-photo img{display:block;width:100%;height:auto;aspect-ratio:3/2;object-fit:cover;max-height:520px}
+.club .club-perks{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:22px}
+.club .club-perks li{flex-direction:column;gap:10px}
+@media (max-width:860px){.club .club-perks{grid-template-columns:1fr}.club .club-perks li{flex-direction:row}}
+.club .club-grid{grid-template-columns:1.15fr 1fr}
+@media (max-width:860px){.club .club-grid{grid-template-columns:1fr}}
+.club-show{display:grid;gap:14px}
+.club-letter,.club-walk{padding:18px 20px;border-radius:var(--r-m);background:rgba(255,250,243,.92);border:1px solid rgba(74,36,16,.08);transition:box-shadow .3s}
+.club-walk.is-hi{box-shadow:0 0 0 3px var(--pista)}
+.club-k{margin:0 0 6px;font:800 .7rem/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--pista-d)}
+.club-letter h3{margin:0 0 10px;font:600 1.15rem/1.25 var(--display);color:var(--ink)}
+.club-letter ul{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+.club-letter li{padding-left:22px;position:relative;font-size:.95rem;line-height:1.4}
+.club-letter li::before{content:"🐾";position:absolute;left:0;top:0;font-size:.8rem}
+.club-letter a{color:var(--ink);text-decoration:underline;text-decoration-color:var(--pista);text-underline-offset:3px}
+.club-walk dl{margin:0;display:grid;gap:6px}
+.club-walk dl div{display:grid;grid-template-columns:90px 1fr;gap:10px;font-size:.92rem}
+.club-walk dt{font-weight:800;color:var(--ink)}
+.club-walk dd{margin:0;color:var(--muted)}
+.club .club-form{background:#FFFAF0;color:var(--ink);border:1.5px solid var(--pista);box-shadow:0 18px 36px -30px rgba(74,36,16,.5)}
+.club .club-form h3{color:var(--ink)}
+.club .club-sub{color:var(--muted)}
+.club .club-form label,.club .club-want legend{color:var(--ink)}
+.club .club-form input[type=email],.club .club-form input[type=text],.club .club-form input[type=month]{width:100%;height:46px;padding:0 14px;border-radius:12px;border:1.5px solid var(--line);background:#fff;color:var(--ink);font-size:1rem}
+.club .club-form small{font-weight:400;color:var(--muted)}
+.club .club-want span{border-color:var(--line);color:var(--ink);background:#fff}
+.club .club-want input:checked+span{background:var(--pista);border-color:var(--pista-d);color:#2F4219}
+.club .club-want input:focus-visible+span{outline-color:var(--pista-d)}
+.club .club-form .check{color:var(--muted)}
+.club .club-form .check a{color:var(--pista-d)}
+.club .club-form .form-msg{color:#A8471F}
+.club-help{margin:6px 0 0;font-size:.82rem;color:var(--muted)}
+.club-age{margin:-2px 0 12px;font-size:.88rem;color:var(--ink)}
+.club-cp-row[hidden]{display:none}
+.club-done{text-align:center;outline:none}
+.club-done-i{margin:0;font-size:1.8rem}
+.club-done h3{margin:6px 0 6px}
+.club-done>p{margin:0 0 10px;color:var(--muted)}
+.club-prefs{list-style:none;margin:0 0 12px;padding:10px 12px;border-radius:12px;background:var(--pista-l);display:grid;gap:4px;font-size:.9rem;text-align:left}
+.club-bd{margin:0 0 12px;text-align:left}
+.club-bd label{display:block;margin-bottom:5px;font-size:.88rem;font-weight:600}
+.club-bd>span{display:flex;gap:8px}
+.club-next{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+/* Vidéo « Pourquoi TeckCare » */
+.at-video{margin:0 auto 22px;max-width:980px;border-radius:var(--r-l);overflow:hidden;background:#EFE6D6;box-shadow:0 22px 40px -30px rgba(74,36,16,.55)}
+.at-video video{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover}

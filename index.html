@@ -404,6 +404,9 @@
 <section class="product-section shop shop--atouts" id="atouts" aria-labelledby="atouts-title">
   <div class="container">
     <h2 class="at-h" id="atouts-title">Pourquoi TeckCare</h2>
+    <figure class="at-video">
+      <video src="assets/video/teckcare-gamelle.mp4" poster="assets/video/teckcare-gamelle.webp" muted loop playsinline preload="metadata" aria-label="Un teckel mange ses croquettes TeckCare dans sa gamelle" data-autoplay></video>
+    </figure>
     <ul class="at-list">
       <li><img src="assets/scenes/croquettes.webp" width="1200" height="800" alt="Sac de croquettes TeckCare 5 kg et sa gamelle de croquettes en étoile" loading="lazy"><div><b>Une forme pensée pour sa petite mâchoire</b><span>Une étoile à quatre branches, pour croquer plutôt qu’avaler.</span></div></li>
       <li><img src="assets/scenes/gourmande.webp" width="1200" height="800" alt="Barquette de pâtée gourmande TeckCare à côté d’une gamelle de pâtée" loading="lazy"><div><b>Pour varier ses repas à la maison</b><span>À mélanger à ses croquettes, en en retirant un peu ce jour-là.</span></div></li>
@@ -562,34 +565,60 @@
   <div class="container">
     <div class="section-head" data-reveal>
       <p class="tag"><span>06</span>Le club TeckCare</p>
-      <h2 id="club-title">Après ses 12 mois, <mark>l’aventure continue.</mark></h2>
-      <p class="lead">Rejoignez la communauté des maîtres de teckels&nbsp;: des conseils pour chaque âge, des rencontres toute l’année, et un réseau pour lui trouver des copains… ou un partenaire.</p>
+      <h2 id="club-title">Le club des teckels <mark>et de leurs humains.</mark></h2>
+      <p class="lead">Des conseils pour le voir grandir, des rencontres près de chez vous et des copains de balade, à tout âge.</p>
+      <p class="club-cont">Chiot aujourd’hui, membre du club pour longtemps.</p>
     </div>
+
+    <figure class="club-photo" data-reveal>
+      <img src="assets/club/balade.webp" srcset="assets/club/balade-800.webp 800w, assets/club/balade.webp 1536w" sizes="(max-width:980px) 100vw, 980px" width="1536" height="1024" alt="Quatre teckels en harnais marchent dans un parc avec leurs propriétaires" loading="lazy" decoding="async">
+    </figure>
+
+    <ul class="club-perks" data-reveal>
+      <li><b aria-hidden="true">✉️</b><span><strong>Des conseils au fil de sa croissance</strong>Une lettre par mois sur ses repas, son éducation et son quotidien.</span></li>
+      <li><b aria-hidden="true">🐾</b><span><strong>Des sorties près de chez vous</strong>Des balades entre teckels et des ateliers avec nos partenaires.</span></li>
+      <li><b aria-hidden="true">🤝</b><span><strong>Des copains pour ses balades</strong>Rencontrez d’autres propriétaires de teckels dans votre ville.</span></li>
+    </ul>
+
     <div class="club-grid">
-      <ul class="club-perks" data-reveal>
-        <li><b aria-hidden="true">✉️</b><span><strong>Des conseils extra</strong>Une lettre par mois, adaptée à l’âge de votre teckel&nbsp;: croissance, dos, éducation, alimentation adulte.</span></li>
-        <li><b aria-hidden="true">🐾</b><span><strong>Des événements exclusifs</strong>Balades de teckels, ateliers avec un vétérinaire, rencontres dans votre ville, plusieurs fois par an.</span></li>
-        <li><b aria-hidden="true">💛</b><span><strong>Trouver son partenaire</strong>Grâce au réseau TeckCare, trouvez un copain de balade ou, pour les adultes, un partenaire de portée près de chez vous.</span></li>
-      </ul>
+      <div class="club-show" data-reveal>
+        <article class="club-letter" aria-labelledby="club-letter-t">
+          <p class="club-k">Aperçu de la lettre du mois</p>
+          <h3 id="club-letter-t"><span id="club-letter-who">Votre chiot</span> grandit&nbsp;: ce mois-ci</h3>
+          <ul>
+            <li><a href="conseils/quantite-croquettes-chiot-teckel.html" data-club-link="conseils">Ses repas&nbsp;: ajuster sa ration à son âge et à sa silhouette</a></li>
+            <li><a href="conseils/accompagner-croissance-teckel.html" data-club-link="conseils">Son quotidien&nbsp;: préserver son dos pendant la croissance</a></li>
+            <li><a href="conseils/transition-alimentaire-chiot-teckel.html" data-club-link="conseils">Ses habitudes&nbsp;: changer d’alimentation sans le brusquer</a></li>
+          </ul>
+        </article>
+        <article class="club-walk" aria-labelledby="club-walk-t">
+          <p class="club-k">Comment se passe une balade du club</p>
+          <h3 id="club-walk-t" class="sr-only">Déroulé d’une balade</h3>
+          <dl>
+            <div><dt>Durée</dt><dd>Environ une heure, à un rythme adapté aux petites pattes</dd></div>
+            <div><dt>Groupe</dt><dd>Quelques teckels et leurs humains, chiots bienvenus</dd></div>
+            <div><dt>Lieu</dt><dd>Un parc près de chez vous</dd></div>
+            <div><dt>Annonce</dt><dd>Les prochaines dates arrivent dans la lettre, selon votre ville</dd></div>
+          </dl>
+        </article>
+      </div>
+
       <form class="club-form" id="club-form" data-reveal novalidate>
         <h3>Rejoindre le club</h3>
-        <p class="club-sub">Gratuit, sans engagement.</p>
+        <p class="club-sub">Gratuit. Désinscription en un clic.</p>
         <div class="form-row"><label for="club-email">Votre e-mail</label><input type="email" id="club-email" autocomplete="email" placeholder="vous@exemple.fr" required></div>
-        <div class="form-row form-row--2">
-          <div><label for="club-dog">Prénom de votre teckel</label><input type="text" id="club-dog" maxlength="20" placeholder="Ex. Noisette"></div>
-          <div><label for="club-cp">Code postal</label><input type="text" id="club-cp" inputmode="numeric" maxlength="5" placeholder="75011"></div>
-        </div>
+        <div class="form-row"><label for="club-dog">Prénom de votre teckel <small>(facultatif)</small></label><input type="text" id="club-dog" maxlength="20" placeholder="Ex. Noisette"></div>
+        <p class="club-age" id="club-age" hidden></p>
         <fieldset class="club-want"><legend>Ce qui m’intéresse</legend>
-          <label><input type="checkbox" name="club-int" value="conseils" checked><span>Conseils</span></label>
-          <label><input type="checkbox" name="club-int" value="evenements" checked><span>Événements</span></label>
-          <label><input type="checkbox" name="club-int" value="partenaire"><span>Trouver un partenaire</span></label>
+          <label><input type="checkbox" name="club-int" value="conseils" checked><span>Les conseils</span></label>
+          <label><input type="checkbox" name="club-int" value="rencontres"><span>Les rencontres</span></label>
         </fieldset>
-        <label class="check" for="club-consent"><input type="checkbox" id="club-consent"><span>J’accepte de recevoir la lettre du club TeckCare. Désinscription en un clic. <a href="confidentialite.html">Confidentialité</a></span></label>
+        <div class="form-row club-cp-row" id="club-cp-row" hidden><label for="club-cp">Code postal</label><input type="text" id="club-cp" inputmode="numeric" maxlength="5" placeholder="75011" autocomplete="postal-code"><p class="club-help">Pour vous proposer les rencontres organisées près de chez vous.</p></div>
+        <label class="check" for="club-consent"><input type="checkbox" id="club-consent"><span>J’accepte de recevoir la lettre du club TeckCare. <a href="confidentialite.html">Confidentialité</a></span></label>
         <button type="submit" class="btn btn--primary btn--block">Rejoindre le club</button>
-        <p class="form-msg" id="club-msg" role="status"></p>
+        <p class="form-msg" id="club-msg" role="status" aria-live="polite"></p>
       </form>
     </div>
-    <p class="club-note" data-reveal>Rencontres pour une portée&nbsp;: réservées aux teckels adultes, avec un bilan vétérinaire à jour. Pour la santé de la race, parlez-en d’abord à votre vétérinaire.</p>
   </div>
 </section>
 

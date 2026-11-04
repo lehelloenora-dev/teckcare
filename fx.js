@@ -647,3 +647,14 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
+
+/* Vidéo « Pourquoi TeckCare » : lecture muette en boucle quand elle est visible, sauf si l'animation est réduite */
+(function () {
+  var vids = [].slice.call(document.querySelectorAll('video[data-autoplay]')); if (!vids.length) return;
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  vids.forEach(function (v) {
+    if (reduce) { v.controls = true; return; }
+    if (!('IntersectionObserver' in window)) { v.play().catch(function () { v.controls = true; }); return; }
+    new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { var p = v.play(); if (p) p.catch(function () { v.controls = true; }); } else v.pause(); }); }, { threshold: 0.35 }).observe(v);
+  });
+})();
