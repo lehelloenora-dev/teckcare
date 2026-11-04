@@ -709,7 +709,7 @@
       box.style.setProperty('--s', b.score);
       box.setAttribute('data-cat', b.shape);
       var L = { mince: ['Plutôt mince', 'side-1'], ideale: ['Dans les repères', 'side-2'], ronde: ['Plutôt ronde', 'side-3'] }[b.shape];
-      $('#bcs-live-txt').innerHTML = '<img class="bcs-live-pic" src="' + BASE + 'assets/bcs/' + L[1] + '.webp" alt="" width="520" height="260"><span><span class="bcs-live-k">Repère indicatif</span><b>' + L[0] + '</b><small>D’après vos réponses, sans diagnostic. Nos conseils suivent à l’étape suivante.</small></span>';
+      $('#bcs-live-txt').innerHTML = '<img class="bcs-live-pic" src="' + BASE + 'assets/bcs/' + L[1] + '.webp" alt="" width="520" height="260"><span><span class="bcs-live-k">Repère indicatif</span><b>' + L[0] + '</b></span>';
     } else {
       $('#bcs-live-txt').textContent = answered ? 'Encore ' + (3 - answered) + ' question' + (3 - answered > 1 ? 's' : '') + '…' : 'Répondez aux trois questions pour voir son estimation.';
     }
