@@ -2,11 +2,9 @@
    TeckCare — Mon véto : annuaire de vétérinaires partenaires et réservation
    PROJET ÉTUDIANT : cliniques, vétérinaires, tarifs et réservations FICTIFS.
    Aucune réservation ni aucun message n'est transmis : tout reste dans ce navigateur.
-   Établissements : OpenStreetMap via l'API Overpass (amenity=veterinary), chargés par zone recherchée,
-   mis en cache 7 jours. Noms d'établissements et de vétérinaires remplacés par des identités fictives
-   stables ; téléphones, sites et liens réels jamais affichés. Couverture non exhaustive.
-   Si l'API est inaccessible (aperçu Claude), un extrait d'exemple TeckCare clairement signalé est utilisé.
-   Carte : Leaflet (fichiers locaux) + fond CARTO/OpenStreetMap, sinon carte simplifiée intégrée.
+   Établissements : uniquement les cliniques partenaires fictives ci-dessous (aucun établissement réel récupéré).
+   Recherche par ville, code postal ou département, calculée localement ; même jeu de données pour la liste et la carte.
+   Carte : Leaflet (fichiers locaux) + fond vectoriel intégré ; plan des rues CARTO/OpenStreetMap ajouté s'il se charge.
    ========================================================================== */
 (function () {
   'use strict';
@@ -19,7 +17,7 @@
   var H_C = { h: WEEK(540, 1080), txt: 'Lun–ven 9h–18h' };
   var PRICE = { premiere: 45, vaccins: 62, bilan: 48 };
 
-  /* ---------- Extrait d'exemple (hors OpenStreetMap) : utilisé seulement si l'API Overpass est inaccessible ---------- */
+  /* ---------- Cliniques partenaires TeckCare du prototype (jeu de données fictif et maîtrisé) ---------- */
   var SAMPLE = [
     { id: 'par-11', name: 'Clinique vétérinaire Oberkampf', vet: 'Dr Camille Lefort', address: '48 rue Oberkampf', city: 'Paris', cp: '75011', lat: 48.8652, lng: 2.3776, phone: '01 99 00 00 11', hours: H_B, prices: { premiere: 48, vaccins: 65, bilan: 52 } },
     { id: 'par-15', name: 'Cabinet vétérinaire du Commerce', vet: 'Dr Hugo Marchal', address: '31 rue du Commerce', city: 'Paris', cp: '75015', lat: 48.8462, lng: 2.2955, phone: '01 99 00 00 15', hours: H_A },
@@ -38,7 +36,7 @@
   ];
   var byId = {}; SAMPLE.forEach(function (c) { c.src = 'sample'; c.prices = c.prices || PRICE; byId[c.id] = c; });
   var CLINICS = SAMPLE; /* jeu courant affiché */
-  var MOTIFS = { premiere: '1re consultation', vaccins: 'Vaccins', bilan: 'Bilan de croissance' };
+  var MOTIFS = { bilan: 'Bilan de croissance', vaccins: 'Vaccination', premiere: 'Consultation générale' };
 
   /* ---------- Outils ---------- */
   function $(s, c) { return (c || document).querySelector(s); }
@@ -62,143 +60,15 @@
   function fmtKm(km) { return km < 10 ? km.toFixed(1).replace('.', ',') + '&nbsp;km' : Math.round(km) + '&nbsp;km'; }
   function haversine(a, b, c, d) { var R = 6371, t = Math.PI / 180, dl = (c - a) * t, dg = (d - b) * t, x = Math.sin(dl / 2) * Math.sin(dl / 2) + Math.cos(a * t) * Math.cos(c * t) * Math.sin(dg / 2) * Math.sin(dg / 2); return 2 * R * Math.asin(Math.sqrt(x)); }
 
-  /* ---------- Identités fictives stables (dérivées de l'identifiant OpenStreetMap) ---------- */
+  /* ---------- Outils de sauvegarde des cliniques dans les réservations ---------- */
   var N_TYPE = ['Clinique vétérinaire', 'Cabinet vétérinaire', 'Centre vétérinaire', 'Clinique vétérinaire', 'Cabinet vétérinaire'];
   var N_PLACE = ['des Tilleuls', 'du Parc', 'des Lilas', 'des Coquelicots', 'des Acacias', 'du Moulin', 'des Platanes', 'de la Fontaine', 'des Glycines', 'du Verger', 'des Peupliers', 'des Marronniers', 'de la Roseraie', 'des Hirondelles', 'du Val', 'des Saules', 'de l’Orée', 'des Cèdres', 'du Belvédère', 'des Mimosas', 'du Clos', 'des Bruyères', 'de la Source', 'des Pins'];
   var F_NAMES = ['Camille', 'Hugo', 'Inès', 'Léa', 'Nathan', 'Sarah', 'Julien', 'Thomas', 'Chloé', 'Emma', 'Paul', 'Zoé', 'Louis', 'Alice', 'Manon', 'Lucas', 'Clara', 'Antoine', 'Juliette', 'Maxime', 'Laura', 'Théo', 'Pauline', 'Romain', 'Marion', 'Adrien', 'Élise', 'Quentin'];
   var L_NAMES = ['Lefort', 'Marchal', 'Bréval', 'Fontanel', 'Corvel', 'Delmonte', 'Arcelin', 'Vandeau', 'Garric', 'Rouzic', 'Hirtzel', 'Kerval', 'Barelli', 'Ferrand', 'Pessac', 'Saverne', 'Morand', 'Daviaud', 'Lacombe', 'Ternier', 'Valois', 'Ribault', 'Castel', 'Aubriot', 'Mévil', 'Sorbier', 'Dorval', 'Grandin'];
   var HOURS = [H_A, H_B, H_C];
-  function fromOsm(el) {
-    var t = el.tags || {}, key = el.type + '/' + el.id, h = hash(key);
-    var lat = el.lat != null ? el.lat : el.center && el.center.lat, lng = el.lon != null ? el.lon : el.center && el.center.lon;
-    if (lat == null || lng == null) return null;
-    var street = [t['addr:housenumber'], t['addr:street'] || t['addr:place']].filter(Boolean).join(' ');
-    var p = PRICE, k = h % 3;
-    return { id: 'osm-' + el.type[0] + el.id, osm: key, src: 'osm', lat: lat, lng: lng,
-      name: N_TYPE[h % N_TYPE.length] + ' ' + N_PLACE[(h >>> 3) % N_PLACE.length],
-      vet: 'Dr ' + F_NAMES[(h >>> 8) % F_NAMES.length] + ' ' + L_NAMES[(h >>> 14) % L_NAMES.length],
-      address: street || 'Adresse non renseignée dans OpenStreetMap', city: t['addr:city'] || '', cp: t['addr:postcode'] || '',
-      phone: fakePhone(t['addr:postcode'] || '', h),
-      hours: HOURS[(h >>> 5) % 3], prices: { premiere: p.premiere + k * 2, vaccins: p.vaccins + k * 2, bilan: p.bilan + k * 2 } };
-  }
-  /* Numéros de la tranche réservée à la fiction (0X 99 00 xx xx) : jamais le vrai numéro */
   function fakePhone(cp, h) { var z = { '75': 1, '77': 1, '78': 1, '91': 1, '92': 1, '93': 1, '94': 1, '95': 1 }[cp.slice(0, 2)] || ({ '1': 2, '2': 2, '3': 3, '4': 4, '5': 5, '6': 4, '0': 4, '8': 3, '9': 5, '7': 4 }[cp.slice(0, 1)] || (1 + h % 5)); return '0' + z + ' 99 00 ' + String((h >>> 4) % 100).padStart(2, '0') + ' ' + String((h >>> 12) % 100).padStart(2, '0'); }
   function snap(c) { return { id: c.id, src: c.src, osm: c.osm, lat: c.lat, lng: c.lng, name: c.name, vet: c.vet, address: c.address, city: c.city, cp: c.cp, phone: c.phone, hoursKey: HOURS.indexOf(c.hours), prices: c.prices }; }
   function unsnap(o) { var c = JSON.parse(JSON.stringify(o)); c.hours = HOURS[o.hoursKey] || H_A; return c; }
-
-  /* ---------- API Overpass (OpenStreetMap) avec cache local ---------- */
-  /* Instances publiques listées sur le wiki OSM ; une seule requête à la fois, pause de 30 s après un 429/406 */
-  var ENDPOINTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
-  var inflight = null, pauseUntil = 0;
-  var TTL = 7 * 24 * 3600 * 1000, memCache = {};
-  /* ---------- Réseau : journal des requêtes et classement des erreurs ---------- */
-  var GEO_API = 'https://geo.api.gouv.fr';
-  var vetLog = window.tcVetLog = [], cspBlocked = {};
-  document.addEventListener('securitypolicyviolation', function (e) { try { var h = new URL(e.blockedURI).host; if (h) cspBlocked[h] = e.effectiveDirective || e.violatedDirective || 'csp'; } catch (x) {} });
-  function logReq(o) { vetLog.push(o); if (vetLog.length > 40) vetLog.shift(); try { console.info('[TeckCare · Mon véto]', o.service, o.status, o.count != null ? o.count + ' élément(s)' : '', o.ms != null ? o.ms + ' ms' : '', o.url); } catch (e) {} renderDiag(); }
-  function hostOf(u) { try { return new URL(u).host; } catch (e) { return ''; } }
-  /* Requête JSON avec délai, journalisée. Les erreurs portent un type : http, timeout, csp (bloqué par la page), network (réseau ou CORS). */
-  function getJSON(service, url, opts, countOf) {
-    opts = opts || {};
-    var t0 = Date.now(), ctrl = 'AbortController' in window ? new AbortController() : null, to = setTimeout(function () { if (ctrl) ctrl.abort(); }, opts.timeout || 20000);
-    if (opts.track) opts.track(ctrl);
-    var shown = opts.logUrl || url;
-    return fetch(url, { method: opts.method || 'GET', body: opts.body, headers: opts.headers, signal: ctrl ? ctrl.signal : undefined })
-      .then(function (r) {
-        clearTimeout(to);
-        if (!r.ok) { var e = new Error('HTTP ' + r.status); e.kind = 'http'; e.http = r.status; throw e; }
-        return r.json().then(function (j) { logReq({ service: service, url: shown, status: r.status, ms: Date.now() - t0, count: countOf ? countOf(j) : null }); return j; });
-      })
-      .catch(function (e) {
-        clearTimeout(to);
-        return new Promise(function (res) { setTimeout(res, 60); }).then(function () {
-          if (!e.kind) {
-            var h = hostOf(url);
-            if (e.name === 'AbortError') { e.kind = opts.aborted && opts.aborted() ? 'aborted' : 'timeout'; }
-            else if (cspBlocked[h]) { e.kind = 'csp'; e.directive = cspBlocked[h]; }
-            else e.kind = 'network';
-            e.host = h;
-          }
-          if (e.kind !== 'aborted') logReq({ service: service, url: shown, status: e.kind === 'http' ? e.http : e.kind === 'csp' ? 'bloquée (' + e.directive + ')' : e.kind === 'timeout' ? 'délai dépassé' : 'échec réseau / CORS', ms: Date.now() - t0, count: null });
-          throw e;
-        });
-      });
-  }
-  function errText(e) {
-    if (e.kind === 'csp') return 'connexion à ' + e.host + ' bloquée par la politique de sécurité de cette page (' + e.directive + ')';
-    if (e.kind === 'timeout') return e.host + ' n’a pas répondu à temps';
-    if (e.kind === 'http') return 'le service a répondu par une erreur HTTP ' + e.http + (e.http === 429 ? ' (trop de requêtes)' : e.http === 504 ? ' (serveur saturé)' : '');
-    return 'connexion à ' + (e.host || 'ce service') + ' impossible (réseau coupé ou accès refusé par le navigateur)';
-  }
-  function renderDiag() {
-    var d = $('#vd-diag'); if (!d) return;
-    if (!vetLog.length) { d.hidden = true; return; }
-    d.hidden = false;
-    $('#vd-diag-list').innerHTML = vetLog.slice(-8).reverse().map(function (o) {
-      return '<li><b>' + esc(o.service) + '</b> · ' + esc(String(o.status)) + (o.count != null ? ' · ' + o.count + ' élément(s)' : '') + (o.ms != null ? ' · ' + o.ms + ' ms' : '') + '<br><code>' + esc(o.url.length > 160 ? o.url.slice(0, 160) + '…' : o.url) + '</code></li>';
-    }).join('');
-  }
-
-  /* ---------- Géocodage : ville, code postal ou département → coordonnées (API Découpage administratif, geo.api.gouv.fr) ---------- */
-  var geoCache = {};
-  function radiusFor(pop, arr) { return arr ? 1500 : pop > 1000000 ? 6000 : pop > 300000 ? 5000 : pop > 100000 ? 4000 : pop > 20000 ? 3000 : 2500; }
-  function geocode(pq) {
-    if (pq.kind === 'around') return Promise.resolve({ lat: pq.v.lat, lon: pq.v.lng, r: pq.v.r, label: '', src: 'position' });
-    if (pq.kind === 'dep') {
-      var b = null; if (depLayer) depLayer.eachLayer(function (l) { if (l.feature.properties.code === pq.v) b = l; });
-      if (!b) { var e0 = new Error('dep'); e0.kind = 'notfound'; return Promise.reject(e0); }
-      var bb = b.getBounds(), c = bb.getCenter();
-      logReq({ service: 'Localisation (contour local du département)', url: 'assets/geo/france.js · ' + pq.v, status: 'OK', ms: 0, count: 1 });
-      return Promise.resolve({ lat: c.lat, lon: c.lng, bbox: [bb.getSouth(), bb.getWest(), bb.getNorth(), bb.getEast()], label: b.feature.properties.nom, src: 'local' });
-    }
-    var url = pq.kind === 'cp'
-      ? GEO_API + '/communes?codePostal=' + pq.v + '&type=commune-actuelle,arrondissement-municipal&fields=nom,code,centre,population,codesPostaux&format=json'
-      : GEO_API + '/communes?nom=' + encodeURIComponent(pq.v) + '&type=commune-actuelle,arrondissement-municipal&fields=nom,code,centre,population,codesPostaux&boost=population&limit=5&format=json';
-    if (geoCache[url]) return Promise.resolve(geoCache[url]);
-    return getJSON('Localisation (geo.api.gouv.fr)', url, { timeout: 12000 }, function (j) { return (j || []).length; }).then(function (list) {
-      list = (list || []).filter(function (x) { return x.centre && x.centre.coordinates; });
-      if (!list.length) { var e = new Error('notfound'); e.kind = 'notfound'; throw e; }
-      var arr = list.filter(function (x) { return / arrondissement/i.test(x.nom); });
-      var pick = pq.kind === 'cp' ? (arr[0] || list.sort(function (a, b) { return (b.population || 0) - (a.population || 0); })[0]) : list[0];
-      var isArr = / arrondissement/i.test(pick.nom);
-      var out = { lat: pick.centre.coordinates[1], lon: pick.centre.coordinates[0], r: radiusFor(pick.population || 0, isArr), label: pick.nom, insee: pick.code, src: 'geo.api.gouv.fr' };
-      geoCache[url] = out; return out;
-    });
-  }
-
-  /* ---------- Établissements : requête Overpass (OpenStreetMap), filtre amenity=veterinary ---------- */
-  function buildQuery(loc) {
-    var head = '[out:json][timeout:25];', vets = 'nwr["amenity"="veterinary"]';
-    if (loc.bbox) return head + vets + '(' + loc.bbox.map(function (n) { return n.toFixed(4); }).join(',') + ');out center tags 120;';
-    return head + vets + '(around:' + loc.r + ',' + loc.lat.toFixed(5) + ',' + loc.lon.toFixed(5) + ');out center tags 80;';
-  }
-  function overpass(loc) {
-    var q = buildQuery(loc), ck = 'q:' + q, cache = get('tc_vet_osm_cache', {}), hit = memCache[ck] || cache[ck];
-    if (hit && Date.now() - hit.ts < TTL) { logReq({ service: 'Établissements (cache local, requête Overpass précédente)', url: q, status: 'cache', ms: 0, count: hit.data.els.length }); return Promise.resolve({ data: hit.data, cached: true }); }
-    if (Date.now() < pauseUntil) { var pe = new Error('pause'); pe.kind = 'http'; pe.http = 429; pe.wait = Math.ceil((pauseUntil - Date.now()) / 1000); return Promise.reject(pe); }
-    if (inflight) try { inflight.abort(); } catch (e) {}
-    var i = 0, mine = null, retried = false;
-    function attempt() {
-      return getJSON('Établissements (Overpass · ' + hostOf(ENDPOINTS[i]) + ')', ENDPOINTS[i], {
-        method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 30000,
-        logUrl: ENDPOINTS[i] + ' ← ' + q,
-        track: function (c) { inflight = mine = c; }, aborted: function () { return inflight !== mine; }
-      }, function (j) { return (j.elements || []).length; })
-        .then(function (j) {
-          var data = { els: (j.elements || []).filter(function (e) { return e.tags && e.tags.amenity === 'veterinary'; }) };
-          memCache[ck] = { ts: Date.now(), data: data };
-          try { var c2 = get('tc_vet_osm_cache', {}), keys = Object.keys(c2); if (keys.length > 25) delete c2[keys[0]]; c2[ck] = memCache[ck]; set('tc_vet_osm_cache', c2); } catch (e) {}
-          return { data: data, cached: false };
-        })
-        .catch(function (e) {
-          if (e.kind !== 'aborted' && e.kind !== 'csp' && i < ENDPOINTS.length - 1) { i++; return attempt(); }
-          if ((e.http === 502 || e.http === 503 || e.http === 504 || e.kind === 'timeout') && !retried) { retried = true; i = 0; return new Promise(function (r) { setTimeout(r, 2500); }).then(attempt); }
-          if (e.http === 429 || e.http === 406) { pauseUntil = Date.now() + 30000; e.wait = 30; }
-          throw e;
-        });
-    }
-    return attempt();
-  }
 
   /* ---------- Réservations (stockage local) ---------- */
   function bookings() { return get('tc_vet_bookings', []); }
@@ -227,29 +97,23 @@
   function nextSlot(c) { var d = nextDays(c, 1)[0]; return d ? { date: d, time: slotsFor(c, d)[0] } : null; }
 
   /* ---------- Bilan de croissance offert ---------- */
+  /* Bilan de croissance offert : pour tout nouveau client, quelle que soit la silhouette, un par client, débloqué par la première commande validée */
+  function validOrders() { var o = get('tc_orders', null); if (o && o.length) return o.filter(function (x) { return x.status !== 'annulée'; }); var l = get('tc_last_order', null); return l ? [l] : []; }
   function offerState() {
-    var r = get('tc_ration', null), order = get('tc_last_order', null), used = get('tc_bilan_used', null);
-    if (!r || !r.tier) return 'none';
-    if (r.heavy) return 'uncertain';
-    if (r.tier === 'ideal') return 'ineligible';
-    if (used) return 'used';
-    return order ? 'ready' : 'wait';
+    if (get('tc_bilan_used', null)) return 'used';
+    return validOrders().length ? 'ready' : 'wait';
   }
-  var OFFER_RULE = 'Selon le résultat du calculateur, un bilan de croissance est offert après votre première commande.';
+  var OFFER_RULE = 'Un bilan de croissance offert après votre première commande, chez une clinique partenaire TeckCare.';
   function renderOffer() {
-    var box = $('#vd-offer'), st = offerState(), r = get('tc_ration', null) || {};
-    var sil = r.silhouette === 'mince' ? 'plutôt mince' : 'plutôt ronde';
+    var box = $('#vd-offer'), st = offerState();
     var msg = {
-      none: ['Selon ses résultats au calculateur, profitez d’un bilan chez un vétérinaire partenaire après votre première commande.', '<a class="btn btn--sm vd-offer-btn" href="#calculateur" data-open-quiz data-vd-offer-btn>Mon chiot peut-il en profiter&nbsp;?</a>'],
-      ineligible: ['Sa silhouette semble dans les repères&nbsp;: le bilan n’est pas offert, la réservation reste possible.', ''],
-      uncertain: ['Certaines réponses semblent inhabituelles (son poids&nbsp;?). Vérifiez-les avant de conclure.', '<a class="btn btn--ghost btn--sm" href="#calculateur" data-open-quiz data-vd-offer-btn>Vérifier mes réponses</a>'],
-      wait: ['Silhouette ' + sil + '&nbsp;: <b>votre bilan sera offert après votre première commande.</b>', '<a class="btn btn--ghost btn--sm" href="#croquettes" data-vd-offer-btn>Voir nos produits</a>'],
-      ready: ['<b>Votre bilan de croissance est offert.</b> Il vous sera proposé à la réservation.', '<button type="button" class="btn btn--primary btn--sm" data-vd-offer-go data-vd-offer-btn>Réserver mon bilan offert</button>'],
-      used: ['<b>Votre bilan offert est déjà réservé</b> (un par client).', '']
+      wait: [OFFER_RULE + ' Un bilan par client.', '<a class="btn btn--sm vd-offer-btn" href="#croquettes" data-vd-offer-btn>Voir nos produits</a>'],
+      ready: ['<b>Votre bilan de croissance est offert.</b> Choisissez le motif «&nbsp;Bilan de croissance&nbsp;» à la réservation.', '<button type="button" class="btn btn--sm vd-offer-btn" data-vd-offer-go data-vd-offer-btn>Réserver mon bilan offert</button>'],
+      used: ['<b>Votre bilan offert est réservé</b> (un par client). Vaccination et consultation générale restent possibles, aux tarifs de la clinique.', '']
     }[st];
     box.className = 'vd-offer vd-offer--' + st;
     var ico = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3v5a5 5 0 0 0 10 0V3"/><path d="M4 3h2M14 3h2"/><path d="M10 13v2a5 5 0 0 0 10 0v-2"/><circle cx="20" cy="11" r="2"/></svg>';
-    box.innerHTML = '<span class="vd-offer-i">' + ico + '</span><div class="vd-offer-t"><p class="vd-offer-h">Un bilan de croissance offert pour votre chiot</p><p class="vd-offer-d">' + msg[0] + '</p></div>' + (msg[1] ? '<div class="vd-offer-a">' + msg[1].replace('class="btn btn--ghost btn--sm"', 'class="btn btn--sm vd-offer-btn"').replace('class="btn btn--primary btn--sm"', 'class="btn btn--sm vd-offer-btn"') + '</div>' : '');
+    box.innerHTML = '<span class="vd-offer-i">' + ico + '</span><div class="vd-offer-t"><p class="vd-offer-h">Un bilan de croissance offert pour votre chiot</p><p class="vd-offer-d">' + msg[0] + '</p></div>' + (msg[1] ? '<div class="vd-offer-a">' + msg[1] + '</div>' : '');
   }
 
   function clinicOf(b) { if (byId[b.clinicId]) return byId[b.clinicId]; if (b.clinic) { byId[b.clinicId] = unsnap(b.clinic); return byId[b.clinicId]; } return null; }
@@ -292,70 +156,86 @@
     if (pq.kind === 'around') return SAMPLE.slice().sort(function (a, b) { return haversine(pq.v.lat, pq.v.lng, a.lat, a.lng) - haversine(pq.v.lat, pq.v.lng, b.lat, b.lng); }).slice(0, 6);
     return SAMPLE.filter(function (c) { return norm(c.city).indexOf(pq.v) === 0; });
   }
-  function srcNote() {
-    var n = $('#vd-src');
-    if (state.src === 'sample') { n.className = 'vd-src vd-src--sample'; n.innerHTML = '<b>Liste enregistrée TeckCare</b>&nbsp;: données fixes intégrées au site, affichées à votre demande. Ce n’est pas le résultat d’une recherche OpenStreetMap.'; n.hidden = false; }
-    else if (state.src === 'osm') { n.className = 'vd-src'; n.innerHTML = 'Emplacements et adresses&nbsp;: © contributeurs OpenStreetMap, requête Overpass <code>amenity=veterinary</code> (liste non exhaustive).' + (state.cached ? ' <span>(résultats en cache)</span>' : ''); n.hidden = false; }
-    else n.hidden = true;
+  function srcNote() { var n = $('#vd-src'); if (n) n.hidden = true; }
+
+  /* ---------- Localisation de la recherche (données locales : cliniques partenaires, villes et départements de la carte) ---------- */
+  var GEO_API = 'https://geo.api.gouv.fr';
+  function depCenter(code) {
+    var b = null; if (depLayer) depLayer.eachLayer(function (l) { if (l.feature.properties.code === code) b = l; });
+    if (!b) return null; var bb = b.getBounds(), c = bb.getCenter();
+    return { lat: c.lat, lon: c.lng, label: b.feature.properties.nom, bounds: bb };
   }
+  function cpDep(cp) { return cp.slice(0, 2) === '20' ? (+cp < 20200 ? '2A' : '2B') : cp.slice(0, 2); }
+  function locate(pq) {
+    if (pq.kind === 'around') return Promise.resolve({ lat: pq.v.lat, lon: pq.v.lng, r: pq.v.r, label: '' });
+    if (pq.kind === 'dep') { var d = depCenter(pq.v); return d ? Promise.resolve({ lat: d.lat, lon: d.lon, dep: pq.v, label: d.label }) : Promise.reject({ kind: 'notfound' }); }
+    if (pq.kind === 'cp') {
+      var hit = SAMPLE.filter(function (c) { return c.cp === pq.v; })[0];
+      if (hit) return Promise.resolve({ lat: hit.lat, lon: hit.lng, r: 6000, label: hit.city + ' ' + pq.v, cp: pq.v });
+      var dc = depCenter(cpDep(pq.v)); if (dc) return Promise.resolve({ lat: dc.lat, lon: dc.lon, r: 25000, label: pq.v, cp: pq.v, approx: true });
+      return Promise.reject({ kind: 'notfound' });
+    }
+    var n = norm(pq.v);
+    var c1 = SAMPLE.filter(function (c) { return norm(c.city) === n; })[0];
+    if (c1) return Promise.resolve({ lat: c1.lat, lon: c1.lng, r: 8000, label: c1.city });
+    var G = window.TC_GEO, c2 = G && G.cities.filter(function (c) { return norm(c[0]) === n; })[0];
+    if (c2) return Promise.resolve({ lat: c2[1], lon: c2[2], r: 8000, label: c2[0] });
+    /* Autre commune : position publique de la commune (API Découpage administratif), sans aucune donnée d'établissement */
+    if (!window.fetch) return Promise.reject({ kind: 'notfound' });
+    return fetch(GEO_API + '/communes?nom=' + encodeURIComponent(pq.v) + '&fields=nom,centre,population&boost=population&limit=1&format=json')
+      .then(function (r) { if (!r.ok) throw { kind: 'net' }; return r.json(); })
+      .then(function (l) { var x = l && l[0]; if (!x || !x.centre) throw { kind: 'notfound' }; return { lat: x.centre.coordinates[1], lon: x.centre.coordinates[0], r: 8000, label: x.nom }; })
+      .catch(function (e) { throw e && e.kind === 'notfound' ? e : { kind: 'net' }; });
+  }
+  function nearby(loc, r) {
+    var list = SAMPLE.map(function (c) { return { c: c, d: haversine(loc.lat, loc.lon, c.lat, c.lng) }; });
+    list = list.filter(function (x) { return loc.dep && !r ? cpDep(x.c.cp) === loc.dep : x.d <= r / 1000; });
+    list.sort(function (a, b) { return a.d - b.d; });
+    state.dist = {}; list.forEach(function (x) { state.dist[x.c.id] = x.d; });
+    return list.map(function (x) { return x.c; });
+  }
+
   function search(q, opts) {
     opts = opts || {};
     var pq = opts.pq || parseQuery(q), cnt = $('#vd-count');
     state.q = q || ''; state.dist = null; state.searched = !!pq; state.pq = pq;
     if (!pq) { setResults([], null); renderList(); renderMap(true); cnt.textContent = ''; srcNote(); return; }
     if (pq.kind === 'bad') { cnt.textContent = 'Saisissez un code postal à 5 chiffres, un département (ex. 69) ou un nom de ville.'; return; }
-    state.busy = true; state.area = null; renderList(true);
-    var btn = $('#vd-form button[type=submit]'); btn.disabled = true;
     var tok = state.tok = (state.tok || 0) + 1;
-    state.lastPq = pq; state.lastQ = q;
-    function stop() { state.busy = false; btn.disabled = false; }
-    cnt.innerHTML = '<span class="vd-spin" aria-hidden="true"></span> Localisation de ' + (pq.kind === 'around' ? 'la zone' : '«&nbsp;' + esc(q) + '&nbsp;»') + '…';
-    geocode(pq).then(function (loc) {
+    state.lastPq = pq; state.lastQ = q; state.area = null;
+    locate(pq).then(function (loc) {
       if (tok !== state.tok) return;
-      if (pq.kind === 'around') loc.r = pq.v.r;
-      state.area = { lat: loc.lat, lon: loc.lon }; state.radius = loc.bbox ? 0 : loc.r; state.loc = loc;
-      setResults([], null); renderMap(true);
-      cnt.innerHTML = '<span class="vd-spin" aria-hidden="true"></span> ' + (loc.label ? esc(loc.label) + ' localisé. ' : '') + 'Recherche des établissements vétérinaires dans OpenStreetMap…';
-      return overpass(loc).then(function (res) {
-        if (tok !== state.tok) return;
-        var list = res.data.els.map(fromOsm).filter(Boolean);
-        list.forEach(function (c) { if (!c.city && loc.label) c.city = loc.label.replace(/ \d+e? Arrondissement$/i, ''); });
-        state.cached = res.cached; stop();
-        setResults(list, 'osm'); done(pq, q);
-        track('vet_search', { query_type: pq.kind, results: list.length, source: 'osm', cached: res.cached });
-      }, function (err) {
-        if (tok !== state.tok || err.kind === 'aborted') return;
-        stop(); setResults([], 'error'); renderList(); renderMap(true); srcNote();
-        cnt.innerHTML = '<span class="vd-err-t">Établissements indisponibles</span>&nbsp;: ' + (loc.label ? esc(loc.label) + ' a bien été localisé, mais ' : '') + esc(errText(err)) + '.' +
-          (err.wait ? ' Réessayez dans ' + err.wait + '&nbsp;s.' : '') + ' <button type="button" class="btn btn--text btn--sm" data-vd-retry>Réessayer</button> <button type="button" class="btn btn--text btn--sm" data-vd-all>Afficher les cliniques TeckCare enregistrées</button>';
-        track('vet_search_error', { step: 'establishments', kind: err.kind, status: err.http || null });
-      });
+      if (opts.r) loc.r = opts.r;
+      state.area = { lat: loc.lat, lon: loc.lon }; state.radius = loc.dep && !opts.r ? 0 : loc.r; state.loc = loc;
+      var list = nearby(loc, state.radius);
+      setResults(list, 'partners'); done(pq, q);
+      track('vet_search', { query_type: pq.kind, results: list.length, radius_km: state.radius ? state.radius / 1000 : null });
     }, function (err) {
       if (tok !== state.tok) return;
-      stop(); setResults([], 'error'); renderList(); renderMap(true); srcNote();
-      if (err.kind === 'notfound') cnt.innerHTML = '<span class="vd-err-t">Lieu introuvable</span>&nbsp;: aucune commune ne correspond à «&nbsp;' + esc(q) + '&nbsp;». Vérifiez l’orthographe ou saisissez un code postal.';
-      else cnt.innerHTML = '<span class="vd-err-t">Localisation impossible</span>&nbsp;: ' + esc(errText(err)) + '. <button type="button" class="btn btn--text btn--sm" data-vd-retry>Réessayer</button> <button type="button" class="btn btn--text btn--sm" data-vd-all>Afficher les cliniques TeckCare enregistrées</button>';
-      track('vet_search_error', { step: 'geocoding', kind: err.kind, status: err.http || null });
+      setResults([], 'error'); renderList(); renderMap(true); srcNote();
+      cnt.innerHTML = err && err.kind === 'net'
+        ? 'Cette ville n’a pas pu être localisée ici. Saisissez plutôt son code postal (ex. 69003).'
+        : 'Aucune commune ne correspond à «&nbsp;' + esc(q) + '&nbsp;». Vérifiez l’orthographe ou saisissez un code postal.';
+      track('vet_search_error', { kind: err && err.kind || 'unknown' });
     });
   }
   function done(pq, q) {
     state.busy = false; $('#vd-form button[type=submit]').disabled = false;
-    if (pq.kind === 'around' && state.src === 'osm') { state.dist = {}; state.results.forEach(function (c) { state.dist[c.id] = haversine(pq.v.lat, pq.v.lng, c.lat, c.lng); }); state.results.sort(function (a, b) { return state.dist[a.id] - state.dist[b.id]; }); }
     renderList(); renderMap(true); srcNote();
     var k = state.results.length, cnt = $('#vd-count'), where = pq.kind === 'around' ? (pq.label || 'autour de vous') : '«&nbsp;' + esc(q) + '&nbsp;»';
-    if (pq.kind === 'sample') { cnt.innerHTML = k + ' cliniques TeckCare enregistrées (données fixes).'; return; }
-    if (k) cnt.innerHTML = k + (k > 1 ? ' établissements trouvés ' : ' établissement trouvé ') + (pq.kind === 'around' ? where : 'pour ' + where) + '.';
+    var rad = state.radius ? ' dans un rayon de ' + Math.round(state.radius / 1000) + '&nbsp;km' : (state.loc && state.loc.dep ? ' dans le département' : '');
+    if (k) cnt.innerHTML = k + (k > 1 ? ' cliniques partenaires TeckCare' : ' clinique partenaire TeckCare') + (pq.kind === 'around' ? ' ' + where : rad + ' pour ' + where) + '.';
     else {
-      var c = state.area, wide = state.radius || 0;
-      cnt.innerHTML = 'Aucun établissement trouvé ' + (pq.kind === 'around' ? where : 'pour ' + where) + '.' +
-        (c && wide && wide < 40000 ? ' <button type="button" class="btn btn--text btn--sm" data-vd-widen="' + (wide >= 15000 ? 40000 : 15000) + '">Élargir à ' + (wide >= 15000 ? 40 : 15) + '&nbsp;km</button>' : '') +
-        (state.src === 'sample' ? ' <button type="button" class="btn btn--text btn--sm" data-vd-all>Voir tout l’extrait</button>' : '');
+      var c = state.area, wide = state.radius || 0, nxt = wide < 50000 ? 50000 : wide < 150000 ? 150000 : 0;
+      cnt.innerHTML = 'Pas encore de clinique partenaire TeckCare' + (pq.kind === 'around' ? ' ' + where : rad + ' pour ' + where) + '.' +
+        (c && nxt ? ' <button type="button" class="btn btn--text btn--sm" data-vd-widen="' + nxt + '">Élargir à ' + nxt / 1000 + '&nbsp;km</button>' : '');
       renderWaitlist(pq.kind === 'cp' ? pq.v : '');
     }
   }
   function widen(r) {
     var c = state.area; if (!c) return;
-    search(state.q, { pq: { kind: 'around', v: { lat: c.lat, lng: c.lon, r: r }, label: 'dans un rayon de ' + (r / 1000) + '&nbsp;km autour de «&nbsp;' + esc(state.q) + '&nbsp;»' } });
+    if (state.pq && state.pq.kind !== 'around') search(state.q, { pq: state.pq, r: r });
+    else search(state.q, { pq: { kind: 'around', v: { lat: c.lat, lng: c.lon, r: r }, label: 'dans un rayon de ' + (r / 1000) + '&nbsp;km autour de vous' } });
   }
 
   function addr(c) { return [c.address, [c.cp, c.city].filter(Boolean).join(' ')].filter(Boolean).join(', '); }
@@ -428,9 +308,6 @@
     function noTiles(why) {
       if (!map || !map.hasLayer(tl)) return;
       map.removeLayer(tl); map.setMaxZoom(12);
-      var blk = Object.keys(cspBlocked).filter(function (h) { return /cartocdn/.test(h); })[0];
-      setMapStatus('Plan des rues indisponible\u00a0: les images de basemaps.cartocdn.com ' + (blk ? 'sont bloquées par la politique de sécurité de cette page (' + cspBlocked[blk] + ')' : why === 'timeout' ? 'ne répondent pas' : 'ne se chargent pas') + '. Fond de carte vectoriel intégré affiché.');
-      logReq({ service: 'Fond de carte (tuiles CARTO)', url: 'https://basemaps.cartocdn.com/rastertiles/voyager/…', status: blk ? 'bloquée (' + cspBlocked[blk] + ')' : why === 'timeout' ? 'délai dépassé' : 'échec', ms: null, count: null });
       if (!G) { fallback(why); return; }
       track('vet_map_fallback', { reason: why, layer: 'tiles' });
     }
@@ -685,11 +562,9 @@
     if ((x = t.closest('[data-vd-pin]'))) { select(x.getAttribute('data-vd-pin'), 'map'); return; }
     if ((x = t.closest('[data-vd-book]'))) { openBooking(x.getAttribute('data-vd-book')); return; }
     if ((x = t.closest('[data-vd-view]'))) { setView(x.getAttribute('data-vd-view')); return; }
-    if (t.closest('[data-vd-all]')) { state.tok = (state.tok || 0) + 1; setResults(SAMPLE.slice(), 'sample'); state.searched = true; state.radius = 0; state.area = null; state.pq = null; done({ kind: 'sample' }, ''); track('vet_sample_view', {}); return; }
     if (t.closest('[data-vd-offer-go]')) { $('#vd-q').focus(); $('#vd-count').innerHTML = 'Recherchez votre ville puis «&nbsp;Prendre rendez-vous&nbsp;»&nbsp;: le bilan offert vous sera proposé.'; return; }
     if ((x = t.closest('[data-vd-cancel]'))) { cancelBooking(x.getAttribute('data-vd-cancel')); return; }
     if ((x = t.closest('[data-vd-edit]'))) { var b0 = bookings().filter(function (y) { return y.id === x.getAttribute('data-vd-edit'); })[0]; if (b0) { clinicOf(b0); openBooking(b0.clinicId, b0); } return; }
-    if (t.closest('[data-vd-retry]')) { if (state.lastPq) search(state.lastQ, { pq: state.lastPq }); return; }
     if ((x = t.closest('[data-vd-widen]'))) { widen(+x.getAttribute('data-vd-widen')); return; }
     if ((x = t.closest('[data-vd-cal]'))) { var host = t.closest('#vd-book') ? $('#vd-cal') : null; if (!host) { openDone(x.getAttribute('data-vd-cal')); host = $('#vd-cal'); } showCal(x.getAttribute('data-vd-cal'), host); var gl = $('[data-vd-gcal]', host); if (gl) gl.focus(); return; }
     if ((x = t.closest('[data-vd-ics]'))) { exportIcs(x.getAttribute('data-vd-ics')); return; }

@@ -431,9 +431,9 @@
     var box = $('#checkup'); if (!box) return;
     var dog = $('#ck-dog'), fb = $('#ck-fb'), wfb = $('#ck-walk-fb'), range = $('#ck-min'), out = $('#ck-min-out');
     var SH = {
-      mince: 'Taille très marquée, côtes visibles : sur l’échelle d’état corporel en 9 points utilisée par les vétérinaires (WSAVA), c’est en dessous de l’idéal. Parlez-en à votre vétérinaire.',
-      ideale: 'Côtes que l’on sent sans les voir, taille visible de dessus : c’est le repère « idéal » (4 à 5 sur 9) de l’échelle WSAVA.',
-      ronde: 'Côtes difficiles à sentir, pas de taille : c’est au-dessus de l’idéal sur l’échelle WSAVA. Votre vétérinaire vous aidera à ajuster sa ration.'
+      mince: 'Taille très marquée, côtes visibles : repère « Plutôt mince ». Parlez-en à votre vétérinaire.',
+      ideale: 'Côtes que l’on sent sans les voir, taille visible de dessus : repère « Dans les repères ».',
+      ronde: 'Côtes difficiles à sentir, pas de taille : repère « Plutôt ronde ». Votre vétérinaire vous aidera à ajuster sa ration.'
     };
     function pick(k) {
       $$('.ck-tab', box).forEach(function (t) { t.setAttribute('aria-selected', String(t.getAttribute('data-ck') === k)); });
@@ -456,12 +456,12 @@
       $$('.ck-shapes [data-shape]', box).forEach(function (b) { b.setAttribute('aria-checked', String(b.getAttribute('data-shape') === v)); });
       dog.setAttribute('data-shape', v);
       if (fb) fb.textContent = SH[v] || '';
-      if (fromUser) { var sync = $('#ck-sync'); if (sync) sync.textContent = 'Reporter dans son carnet de croissance'; }
+      if (fromUser) { var sync = $('#ck-sync'); if (sync) sync.textContent = 'Reporter dans le calculateur'; }
     }
     var syncBtn = $('#ck-sync'); if (syncBtn) syncBtn.addEventListener('click', function () {
       var v = dog.getAttribute('data-shape'), r = $('input[name="bcs-waist"][value="' + ({ mince: 1, ideale: 2, ronde: 3 })[v] + '"]');
       if (r) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
-      this.textContent = 'C’est noté dans son carnet ✓';
+      this.textContent = 'C’est noté dans le calculateur ✓';
     });
     document.addEventListener('change', function (e) { if (e.target && e.target.name === 'bcs-waist') setShape(({ 1: 'mince', 2: 'ideale', 3: 'ronde' })[e.target.value], false); });
     var counted = false;

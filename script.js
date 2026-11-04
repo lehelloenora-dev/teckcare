@@ -226,11 +226,41 @@
   var cart = (store.get('tc_cart', []) || []).filter(function (i) { return fmtById(i.id) && i.qty > 0; });
   var lastFocus = null;
 
+  /* Parrainage : code distinct par client (pas seulement le prénom), −20 % sur un seul sac de croquettes à la première commande */
+  var REF = CFG.referral || { discount: 0.20, rewardAfter: 3, rewardFormat: 'poulet-saumon-2kg' };
+  function validOrders() { return (store.get('tc_orders', []) || []).filter(function (o) { return o.status !== 'annulée'; }); }
+  function myRefCode() {
+    var r = store.get('tc_ref', null);
+    if (!r) { var A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', c = ''; for (var i = 0; i < 6; i++) c += A[Math.floor(Math.random() * A.length)]; r = { code: 'TECK-' + c, created: Date.now() }; store.set('tc_ref', r); }
+    return r.code;
+  }
+  function refCodeStatus(code) {
+    code = String(code || '').trim().toUpperCase();
+    if (!code) return { ok: false, msg: '' };
+    if (!/^TECK-[A-Z2-9]{6}$/.test(code)) return { ok: false, msg: 'Ce code n’a pas le bon format (ex. TECK-7KQ2MP).' };
+    var mine = store.get('tc_ref', null); if (mine && mine.code === code) return { ok: false, msg: 'Votre propre code ne peut pas vous être appliqué.' };
+    if (validOrders().length) return { ok: false, msg: 'Le code parrain est réservé à la première commande.' };
+    return { ok: true, code: code, msg: '' };
+  }
   function cartTotals() {
-    var sub = 0, count = 0;
-    cart.forEach(function (i) { var f = fmtById(i.id); sub += f.price * i.qty; count += i.qty; });
-    var ship = cart.length ? CFG.shipping.fee : 0;
-    return { sub: sub, ship: ship, total: sub + ship, count: count };
+    var sub = 0, count = 0, bagMax = 0;
+    cart.forEach(function (i) { var f = fmtById(i.id); sub += f.price * i.qty; count += i.qty; if (!f.extra) bagMax = Math.max(bagMax, f.price); });
+    var code = store.get('tc_cart_code', ''), st = refCodeStatus(code);
+    var disc = st.ok && bagMax ? Math.round(bagMax * REF.discount * 100) / 100 : 0;
+    var merch = Math.max(0, sub - disc), SH = CFG.shipping;
+    var ship = cart.length ? (merch >= SH.freeFrom ? 0 : SH.fee) : 0;
+    return { sub: sub, disc: disc, code: st.ok ? st.code : '', codeMsg: code && !st.ok ? st.msg : (code && st.ok && !bagMax ? 'Le code s’applique à un sac de croquettes : ajoutez-en un.' : ''), merch: merch, ship: ship, total: Math.round((merch + ship) * 100) / 100, count: count, left: cart.length && ship ? Math.max(0, SH.freeFrom - merch) : 0, hasBag: !!bagMax };
+  }
+  function totalsRows(t) {
+    return '<div><span>Sous-total</span><span>' + eur(t.sub) + '</span></div>' +
+      (t.disc ? '<div class="tot-disc"><span>Parrainage (−' + Math.round(REF.discount * 100) + '&nbsp;% sur un sac)</span><span>−' + eur(t.disc) + '</span></div>' : '') +
+      '<div><span>' + esc(CFG.shipping.label) + '</span><span>' + (t.ship ? eur(t.ship) : 'Offerte') + '</span></div>' +
+      '<div class="grand"><span>Total</span><span>' + eur(t.total) + '</span></div>';
+  }
+  function shipBar(t) {
+    if (!cart.length) return '';
+    var SH = CFG.shipping, pc = Math.min(100, Math.round(t.merch / SH.freeFrom * 100));
+    return '<div class="ship-bar"><p>' + (t.ship ? 'Plus que <b>' + eur(t.left) + '</b> pour la livraison offerte.' : '<b>Livraison offerte</b> 🎉') + '</p><span class="ship-track" aria-hidden="true"><i style="width:' + pc + '%"></i></span><small>Livraison ' + eur(SH.fee) + ', offerte dès ' + eur(SH.freeFrom) + ' de produits (après réduction).</small></div>';
   }
   function gaItems() { return cart.map(function (i) { return gaItem(fmtById(i.id), i.qty); }); }
   function saveCart() { store.set('tc_cart', cart); renderCart(); updateBadge(); }
@@ -256,7 +286,7 @@
   function renderCart() {
     var body = $('#cart-body'), foot = $('#cart-foot'); if (!body) return;
     if (!cart.length) {
-      body.innerHTML = '<div class="cart-empty"><p>Votre panier est vide pour le moment.</p><button class="btn btn--primary" type="button" data-cart-calc>Ouvrir son carnet</button></div>';
+      body.innerHTML = '<div class="cart-empty"><p>Votre panier est vide pour le moment.</p><button class="btn btn--primary" type="button" data-cart-calc>Préparer sa gamelle</button></div>';
       foot.innerHTML = ''; foot.hidden = true; return;
     }
     foot.hidden = false;
@@ -265,15 +295,14 @@
       return '<div class="cart-item" data-id="' + f.id + '">' +
         '<div class="thumb">' + itemThumb(f) + '</div>' +
         '<div><div class="name">' + esc(itemName(f)) + '</div><div class="variant">' + (f.extra ? '' : 'Sac de ') + esc(f.label) + ' · ' + eur(f.price) + '</div>' +
-        '<div class="qty" role="group" aria-label="Quantité"><button type="button" data-qty="-1" aria-label="Retirer un sac">−</button><output aria-live="polite">' + i.qty + '</output><button type="button" data-qty="1" aria-label="Ajouter un sac">+</button></div></div>' +
+        '<div class="qty" role="group" aria-label="Quantité"><button type="button" data-qty="-1" aria-label="Retirer un article">−</button><output aria-live="polite">' + i.qty + '</output><button type="button" data-qty="1" aria-label="Ajouter un article">+</button></div></div>' +
         '<div><div class="line-price">' + eur(f.price * i.qty) + '</div><button type="button" class="remove-btn" data-remove>Supprimer</button></div></div>';
     }).join('');
-    var t = cartTotals();
-    foot.innerHTML =
-      '<p class="demo-mini">Précommande : aucun paiement n’est demandé aujourd’hui.</p>' +
-      '<div class="totals"><div><span>Sous-total</span><span>' + eur(t.sub) + '</span></div>' +
-      '<div><span>' + esc(CFG.shipping.label) + '</span><span>' + (t.ship ? eur(t.ship) : 'Offerte') + '</span></div>' +
-      '<div class="grand"><span>Total</span><span>' + eur(t.total) + '</span></div></div>' +
+    var t = cartTotals(), code = store.get('tc_cart_code', '');
+    foot.innerHTML = shipBar(t) +
+      '<form class="ref-apply" data-ref-form novalidate><label for="cart-ref">Code de parrainage <em>(facultatif)</em></label><span><input id="cart-ref" type="text" autocomplete="off" spellcheck="false" placeholder="TECK-XXXXXX" maxlength="11" value="' + esc(code) + '"><button type="submit" class="btn btn--ghost btn--sm">' + (t.code ? 'Appliqué ✓' : 'Appliquer') + '</button></span>' +
+      '<small class="ref-msg" role="status">' + (t.code ? '−' + Math.round(REF.discount * 100) + '&nbsp;% sur un sac de croquettes (hors pâtées et livraison).' : esc(t.codeMsg)) + '</small></form>' +
+      '<div class="totals">' + totalsRows(t) + '</div>' +
       '<button class="btn btn--primary btn--lg btn--block" type="button" data-checkout>Passer la commande</button>' +
       '<button class="btn btn--text" type="button" data-close-cart>Continuer mes achats</button>';
   }
@@ -308,13 +337,20 @@
     d.addEventListener('click', function (e) {
       var t = e.target;
       if (t.closest('[data-close-cart]')) return closeCart();
-      if (t.closest('[data-cart-calc]')) { closeCart(); var c = $('#calculateur'); if (c) c.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth' }); return; }
+      if (t.closest('[data-cart-calc]')) { closeCart(); var c = $('#calculateur'); if (c) { location.hash = '#calculateur'; c.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth' }); } return; }
       if (t.closest('[data-checkout]')) return openCheckout();
       var row = t.closest('.cart-item'); if (!row) return;
       var item = cart.filter(function (i) { return i.id === row.getAttribute('data-id'); })[0]; if (!item) return;
       var q = t.closest('[data-qty]');
       if (q) { item.qty += parseInt(q.getAttribute('data-qty'), 10); if (item.qty < 1) cart.splice(cart.indexOf(item), 1); saveCart(); }
       else if (t.closest('[data-remove]')) { cart.splice(cart.indexOf(item), 1); saveCart(); }
+    });
+    d.addEventListener('submit', function (e) {
+      var f = e.target.closest('[data-ref-form]'); if (!f) return; e.preventDefault();
+      var v = ($('#cart-ref').value || '').trim().toUpperCase(), st = refCodeStatus(v);
+      store.set('tc_cart_code', v); renderCart();
+      track(st.ok ? 'referral_code_applied' : 'referral_code_rejected', { valid: st.ok });
+      var i = $('#cart-ref'); if (i) i.focus();
     });
     d.addEventListener('keydown', function (e) {
       if (e.key !== 'Tab') return;
@@ -426,11 +462,11 @@
     var el = $('#calc-explainer'); if (!el) return;
     el.innerHTML =
       '<p>Nous estimons le besoin énergétique quotidien de votre chiot, puis nous le convertissons en grammes de croquettes.</p>' +
-      '<p class="formula">besoin (kcal) = ' + R.rer.coef + ' × poids<sup>' + String(R.rer.exponent).replace('.', ',') + '</sup> × facteur de croissance × silhouette<br>ration (g/jour) = besoin ÷ ' + R.kcalPerKg.toLocaleString('fr-FR') + ' kcal/kg × 1000</p>' +
+      '<p class="formula">besoin (kcal) = ' + R.rer.coef + ' × poids<sup>' + String(R.rer.exponent).replace('.', ',') + '</sup> × facteur de croissance<br>ration (g/jour) = besoin ÷ ' + R.kcalPerKg.toLocaleString('fr-FR') + ' kcal/kg × 1000</p>' +
       '<div class="table-scroll"><table class="age-table"><thead><tr><th>Âge</th><th>Facteur de croissance</th><th>Repas par jour</th></tr></thead><tbody>' +
       R.factorsByAge.map(function (a) { return '<tr><td>' + a.from + (a.to !== a.from ? ' à ' + a.to : '') + ' mois</td><td>× ' + String(a.factor).replace('.', ',') + '</td><td>' + a.meals + '</td></tr>'; }).join('') +
       '</tbody></table></div>' +
-      '<p class="note">Ces facteurs et la densité énergétique sont des valeurs courantes de la littérature vétérinaire. La silhouette ne modifie pas la ration automatiquement : votre vétérinaire l’ajuste si besoin. C’est une estimation : pesez votre chiot chaque semaine et ajustez avec votre vétérinaire.</p>';
+      '<p class="note">Ces facteurs et la densité énergétique sont des valeurs courantes de la littérature vétérinaire. Sa variété et sa silhouette ne modifient pas ce calcul : elles adaptent nos conseils, et votre vétérinaire ajuste la ration si besoin. C’est une estimation : pesez votre chiot chaque semaine et ajustez avec votre vétérinaire.</p>';
     var comp = $('#composition-list');
     if (comp) comp.innerHTML = CFG.composition.items.map(function (i) { return '<div><dt>' + esc(i.label) + '</dt><dd>' + esc(i.value) + '</dd></div>'; }).join('');
   }
@@ -463,14 +499,14 @@
   }
   function downloadSheet() {
     var c = calc.result; if (!c) return;
-    var n = pupName(), r = c.r, shapeLbl = ({ mince: 'mince', ideale: 'idéale', ronde: 'ronde' })[c.shape] || c.shape;
-    var rows = FORMATS.map(function (f) { return '<tr><td>' + esc(f.label) + '</td><td>≈ ' + bagDays(f, r.grams) + ' jours</td></tr>'; }).join('');
+    var n = pupName(), r = c.r, shapeLbl = calc.silLbl || '', fc = fmtById(calc.resFmt) || c.rec;
+    var rows = FORMATS.map(function (f) { return '<tr><td>' + esc(f.label) + (f.id === fc.id ? ' (format choisi)' : '') + ' · ' + eur(f.price) + '</td><td>≈ ' + bagDays(f, r.grams) + ' jours</td></tr>'; }).join('');
     var html = '<!doctype html><html lang="fr"><meta charset="utf-8"><title>Fiche de ration' + (n ? ' de ' + esc(n) : '') + ' — TeckCare</title>' +
       '<style>body{font:16px/1.5 system-ui,sans-serif;max-width:640px;margin:40px auto;padding:0 20px;color:#2A1A12;background:#F6EEDC}h1{font-size:2rem;margin:0 0 4px}.big{font-size:4rem;font-weight:800;color:#9A4519;margin:10px 0 0}table{border-collapse:collapse;width:100%;margin:12px 0}td{border-bottom:2px dashed #bba;padding:8px 4px}.warn{background:#FFE08A;padding:12px;border:2px solid #3B2218;border-radius:10px;font-size:.9rem}</style>' +
       '<h1>' + (n ? 'La ration de ' + esc(n) : 'Fiche de ration') + '</h1><p>TeckCare · croquettes pour chiots teckels</p>' +
-      '<p>' + c.age + ' mois · ' + fmtWeight(c.weight) + ' kg · silhouette ' + esc(shapeLbl) + '</p>' +
-      '<p class="big">' + r.grams + ' g <small style="font-size:1.2rem">/ jour</small></p><p>soit ' + r.meals + ' repas d’environ ' + r.perMeal + ' g.</p>' +
-      '<h2>Durée d’un sac</h2><table>' + rows + '</table>' +
+      '<p>' + c.age + ' mois · ' + fmtWeight(c.weight) + ' kg' + (shapeLbl ? ' · repère de silhouette : ' + esc(shapeLbl) : '') + '</p>' +
+      '<p class="big">' + r.grams + ' g <small style="font-size:1.2rem">/ jour</small></p><p>' + mealsTxt(r.grams, r.meals).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ') + '.</p>' +
+      '<h2>Durée estimée d’un sac</h2><table>' + rows + '</table>' +
       '<p class="warn">Estimation indicative : elle ne remplace pas l’avis de votre vétérinaire. Pesez votre chiot chaque semaine et ajustez.</p>' +
       '<p style="font-size:.85rem;color:#675548">Fiche créée le ' + new Date().toLocaleDateString('fr-FR') + '.</p></html>';
     var url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
@@ -509,7 +545,7 @@
         '<li><b>' + r.meals + ' repas</b> d’environ ' + r.perMeal + '&nbsp;g, croquettes pesées.</li>' +
         '<li><b>Une pesée par semaine</b>, et un check-up croissance chez le vétérinaire vers 6 et 9&nbsp;mois.</li></ul>' +
         menuBlock(b, r, nm) +
-        '<p class="plan-gift">🎁 Avec son 1<sup>er</sup> sac TeckCare, <b>une consultation vétérinaire est offerte</b> chez le vétérinaire de votre choix.</p>' +
+        '<p class="plan-gift">🎁 Un bilan de croissance offert après votre première commande, chez une clinique partenaire TeckCare.</p>' +
         '<div class="plan-actions">' + bagBtn(true) + '<a class="btn btn--ghost" href="#veterinaires">Parole de véto</a></div></div>';
     } else if (tier === 'ajuste') {
       h = '<div class="plan plan--ajuste"><p class="plan-k"><i>~</i>Notre conseil</p><h4>Une alimentation suivie de près pour ' + who + '.</h4>' +
@@ -521,7 +557,7 @@
         '<li><b>Un avis vétérinaire</b> pour ajuster sa ration si besoin.</li></ul>' +
         '<form class="vet-find vet-find--plan" data-vet-find novalidate><label for="vf-cp-r">Le vétérinaire le plus proche de chez vous</label><div class="vf-row"><input id="vf-cp-r" type="text" inputmode="numeric" maxlength="5" placeholder="Code postal" autocomplete="postal-code"><a class="btn btn--primary" href="https://www.google.com/maps/search/v%C3%A9t%C3%A9rinaire" target="_blank" rel="noopener" data-vf-go>Trouver un véto</a></div></form>' +
         menuBlock(b, r, nm) +
-        '<p class="plan-gift">🎁 Avec son 1<sup>er</sup> sac TeckCare, <b>une consultation vétérinaire est offerte</b> chez le vétérinaire de votre choix.</p>' +
+        '<p class="plan-gift">🎁 Un bilan de croissance offert après votre première commande, chez une clinique partenaire TeckCare.</p>' +
         '<div class="plan-actions">' + bagBtn(true) + '<a class="btn btn--ghost" href="#veterinaires">Demander l’avis d’un véto</a></div></div>';
     } else {
       h = '<div class="plan plan--veto"><p class="plan-k"><i>!</i>Notre conseil</p><h4>D’abord, une consultation vétérinaire pour ' + who + '.</h4>' +
@@ -530,13 +566,37 @@
         '<li><b>Apportez sa fiche de ration</b>&nbsp;: son poids, son âge et ses réponses.</li>' +
         '<li><b>Ensuite seulement</b>, adaptez son sac et sa ration avec lui.</li></ul>' +
         '<form class="vet-find vet-find--plan" data-vet-find novalidate><label for="vf-cp-r">Le vétérinaire le plus proche de chez vous</label><div class="vf-row"><input id="vf-cp-r" type="text" inputmode="numeric" maxlength="5" placeholder="Code postal" autocomplete="postal-code"><a class="btn btn--primary" href="https://www.google.com/maps/search/v%C3%A9t%C3%A9rinaire" target="_blank" rel="noopener" data-vf-go>Trouver un véto</a></div></form>' +
-        '<p class="plan-gift">🎁 Avec son 1<sup>er</sup> sac TeckCare, <b>une consultation vétérinaire est offerte</b> chez le vétérinaire de votre choix.</p>' +
+        '<p class="plan-gift">🎁 Un bilan de croissance offert après votre première commande, chez une clinique partenaire TeckCare.</p>' +
         '<div class="plan-actions">' + vetBtn + '<button type="button" class="btn btn--ghost" data-sheet>Télécharger sa fiche</button></div></div>';
     }
     if (heavy) h += '<div class="result-consult"><b>Vérifiez la pesée.</b> Ce poids est inhabituel pour un chiot teckel&nbsp;: si elle est exacte, parlez-en à votre vétérinaire.</div>';
     return h;
   }
 
+  /* Répartition des repas : des portions entières dont la somme fait exactement la ration du jour */
+  function mealSplit(g, m) { var base = Math.floor(g / m), extra = g - base * m, out = []; for (var i = 0; i < m; i++) out.push(base + (i < extra ? 1 : 0)); return out; }
+  function mealsTxt(g, m) {
+    var p = mealSplit(g, m), hi = p[0], lo = p[p.length - 1], nHi = p.filter(function (x) { return x === hi; }).length;
+    if (hi === lo) return '<b>' + m + ' repas</b> de <b>' + hi + '&nbsp;g</b>';
+    return '<b>' + m + ' repas</b>&nbsp;: ' + nHi + ' de ' + hi + '&nbsp;g et ' + (m - nHi) + ' de ' + lo + '&nbsp;g';
+  }
+  /* Sac du résultat : image, prix, durée, ajout au panier, fiche et rappel suivent le format choisi */
+  function renderResBag() {
+    var c = calc.result, box = $('#sr-bag'); if (!c || !box) return;
+    var f = fmtById(calc.resFmt) || c.rec, d = bagDays(f, c.r.grams), nm = pupName();
+    box.innerHTML = '<div class="fx-imgs fp-imgs"><img class="fx-img-bag" src="' + BASE + 'assets/pack/photo/bag' + f.kg + '-front.webp" alt="Sac de croquettes Poulet & Saumon ' + esc(f.label) + '"></div>' +
+      '<div class="fp-info">' +
+      '<p class="fp-k">🍽️ ' + (f.id === c.rec.id ? (nm ? 'Le sac conseillé pour ' + esc(nm) : 'Le sac conseillé') : 'Votre format') + '</p>' +
+      '<h4 class="fx-name" id="sr-bag-t">Croquettes Poulet &amp; Saumon · ' + esc(f.label) + '</h4>' +
+      '<p class="fx-v">Environ <b>' + d + '&nbsp;jours</b> avec sa ration actuelle (estimation).</p>' +
+      '<div class="fp-buy"><span class="fx-seg fx-fmt" role="group" aria-label="Format du sac">' + FORMATS.map(function (g) { return '<button type="button" data-sr-fmt="' + g.id + '" aria-pressed="' + (g.id === f.id) + '">' + esc(g.label) + '</button>'; }).join('') + '</span>' +
+      '<span class="fp-why">Le format dont la durée se rapproche le plus d’un mois avec sa ration' + (f.id === c.rec.id ? '' : '&nbsp;: le ' + esc(c.rec.label)) + '.</span></div>' +
+      '<div class="fp-foot"><p class="fp-price"><b>' + eur(f.price) + '</b></p><button type="button" class="btn btn--primary fx-go" data-sr-add="' + f.id + '">Ajouter au panier</button></div>' +
+      '<p class="res-added" role="status" aria-live="polite"></p></div>';
+    var rem = $('#sr-rem');
+    if (rem) rem.innerHTML = '<span class="fs-cal" aria-hidden="true">📅</span><p>Son sac de ' + esc(f.label) + ' dure environ <b>' + d + '&nbsp;jours</b>. Recevez un rappel cinq jours avant la fin.</p>' +
+      '<span class="fs-rem-a"><button type="button" class="btn btn--ghost" data-open-reminder>Créer mon rappel</button><button type="button" class="btn btn--text" data-sheet>Télécharger sa fiche</button></span>';
+  }
   function showResult(age, w, shape) {
     var r = computeRation(age, w, shape);
     var rec = recommendedFormat(r.grams);
@@ -579,45 +639,31 @@
       return '<li>' + esc(o.x.name) + ' (' + esc(o.x.label) + ')&nbsp;: environ ' + Math.round(o.k.grams * o.k.kcalPer100g / 100) + '&nbsp;kcal, soit l’équivalent de ' + o.eq + '&nbsp;g de croquettes. Les jours où il en mange une, retirez ' + o.eq + '&nbsp;g de croquettes.</li>';
     }).join('');
 
-    /* Repère de silhouette : illustration + libellé simple, sans note chiffrée ni diagnostic */
+    /* Repère de silhouette : illustration + libellé simple, sans note chiffrée ni diagnostic.
+       Il oriente les conseils et l'avis vétérinaire ; il ne modifie pas la ration (formule calculée avec la silhouette « idéale »). */
     var SIL = { mince: { lbl: 'Plutôt mince', pic: 'side-1' }, ideale: { lbl: 'Dans les repères', pic: 'side-2' }, ronde: { lbl: 'Plutôt ronde', pic: 'side-3' } }[cat];
+    calc.silCat = cat; calc.silLbl = SIL.lbl;
     var silTip = tier === 'ideal'
-      ? 'Gardez sa ration et pesez-le chaque semaine&nbsp;: elle évolue avec lui.'
+      ? 'Suivez sa croissance et réévaluez régulièrement sa ration.'
       : tier === 'ajuste'
         ? 'Pesez-le chaque semaine et parlez-en à votre vétérinaire lors de sa prochaine visite.'
-        : 'Demandez l’avis de votre vétérinaire avant de changer son alimentation.';
-    var silCard = '<section class="sr-sil" data-cat="' + cat + '" aria-labelledby="sr-sil-t">' +
-      '<img class="sr-sil-pic" src="' + BASE + 'assets/bcs/' + SIL.pic + '.webp" alt="" width="520" height="260">' +
-      '<div><p class="sr-k" id="sr-sil-t">Repère de silhouette <span>indicatif</span></p><p class="sr-sil-l">' + SIL.lbl + '</p>' +
-      '<p class="sr-sil-tip">' + silTip + '</p><p class="sr-note">Un repère basé sur vos réponses, pas un diagnostic. Il ne modifie pas la ration estimée.</p></div></section>';
+        : 'Demandez l’avis d’un vétérinaire avant de changer son alimentation.';
+    var silRow = '<div class="fx-sil fx-silrow fx-sil--' + tier + '"><img src="' + BASE + 'assets/bcs/' + SIL.pic + '.webp" alt="" width="520" height="260"><p><span class="fx-sil-k">Repère indicatif d’après vos réponses</span><b>' + SIL.lbl + '</b> · ' + silTip + '</p></div>';
 
-    /* Sac conseillé : format le plus proche de la durée visée, croquettes seules */
-    var bagCard = function (f) {
-      var d = bagDays(f, r.grams);
-      return '<img class="sr-bag-img" src="' + BASE + 'assets/pack/photo/bag' + f.kg + '-front.webp" alt="Sac TeckCare Poulet & Saumon ' + esc(f.label) + '" width="300" height="430">' +
-        '<div class="sr-bag-c"><p class="sr-k">' + (f.id === rec.id ? 'Sac conseillé' : 'Autre format') + '</p>' +
-        '<p class="sr-bag-n">Croquettes Poulet &amp; Saumon · <b>' + esc(f.label) + '</b></p>' +
-        '<p class="sr-bag-p"><b>' + eur(f.price) + '</b> · environ <b>' + d + '&nbsp;jours</b></p>' +
-        '<div class="sr-fmt" role="group" aria-label="Format du sac">' + FORMATS.map(function (g) { return '<button type="button" class="sr-fmt-b" data-sr-fmt="' + g.id + '" aria-pressed="' + (g.id === f.id) + '">' + esc(g.label) + (g.id === rec.id ? ' <small>conseillé</small>' : '') + '</button>'; }).join('') + '</div>' +
-        '<button type="button" class="btn btn--primary sr-add" data-sr-add="' + f.id + '">Ajouter ce sac au panier</button>' +
-        '<p class="res-added" role="status" aria-live="polite"></p></div>';
-    };
-    calc.srBag = bagCard;
-
-    /* Un seul complément : nomade si sorties ou voyages fréquents, sinon gourmande */
+    /* Un seul complément : nomade si sorties ou voyages fréquents, sinon gourmande. Rien n'est ajouté ni présélectionné. */
     var popts = pateOptions(r.grams), pk = calc.travel === 'souvent' ? 'pate-nomade-100g' : 'pate-gourmande-80g';
     var po = popts.filter(function (o) { return o.id === pk; })[0];
-    var extraCard = !po ? '' :
-      '<section class="sr-extra" aria-labelledby="sr-extra-t"><h4 id="sr-extra-t">Pour compléter sa gamelle</h4>' +
-      '<div class="sr-extra-b"><img src="' + BASE + po.x.img + '" alt="' + esc(po.x.name + ' ' + po.x.label) + '" width="160" height="200" loading="lazy">' +
-      '<div><p class="sr-extra-n">' + esc(po.k.label) + ' ' + esc(po.x.label) + ' <span>' + eur(po.x.price) + '</span></p>' +
-      '<p class="sr-extra-w">' + (pk === 'pate-nomade-100g' ? 'Il vous suit souvent en sortie ou en voyage&nbsp;: une gourde prête à servir, facile à emporter.' : 'Une barquette à mélanger à ses croquettes pour varier ses repas.') + '</p>' +
-      '<p class="sr-extra-q">Le jour où vous la lui donnez, retirez environ <b>' + po.eq + '&nbsp;g de croquettes</b>, soit ' + po.rest + '&nbsp;g ce jour-là.</p>' +
-      '<button type="button" class="btn btn--ghost btn--sm" data-sr-pate="' + po.id + '">Ajouter</button><p class="res-added" role="status" aria-live="polite"></p></div></div></section>';
+    var extra = !po ? '' :
+      '<section class="fx-extra" aria-labelledby="fx-extra-t"><img src="' + BASE + po.x.img + '" alt="" width="120" height="150" loading="lazy">' +
+      '<div><p class="fx-extra-k" id="fx-extra-t">Pour compléter sa gamelle</p>' +
+      '<p class="fx-extra-n"><b>' + esc(po.k.label) + ' ' + esc(po.x.label) + '</b> · ' + eur(po.x.price) + '</p>' +
+      '<p class="fx-extra-w">' + (pk === 'pate-nomade-100g' ? 'Il vous accompagne souvent en sortie ou en voyage&nbsp;: une gourde prête à servir, facile à emporter.' : 'À mélanger à ses croquettes, de temps en temps ou plus régulièrement, pour varier ses repas.') +
+      ' Le jour où il en mange une, retirez environ <b>' + po.eq + '&nbsp;g</b> de croquettes.</p></div>' +
+      '<div class="fx-extra-a"><button type="button" class="btn btn--ghost btn--sm" data-sr-pate="' + po.id + '">Ajouter</button><p class="res-added" role="status" aria-live="polite"></p></div></section>';
 
     var title = nm ? 'La gamelle de <span class="js-pup">' + esc(nm) + '</span>' : 'Sa gamelle';
     var html =
-      '<div class="result fx fx-sheet sr">' +
+      '<div class="result fx fx-sheet">' +
       '<header class="fs-head"><h3 class="result-title">' + title + '</h3>' +
       '<p class="fs-prof">' + age + '&nbsp;mois · ' + fmtWeight(w) + '&nbsp;kg' + (calc.variety && VAR[calc.variety] ? ' · Teckel ' + VAR[calc.variety] : '') + ' · <button type="button" class="btn btn--text fx-edit" data-edit-recap>Modifier</button></p></header>' +
       '<section class="fs-main" aria-label="Sa ration">' +
@@ -625,22 +671,25 @@
       '<img class="bowl-img" src="' + BASE + 'assets/bowl-full.webp" width="560" height="329" alt="">' +
       '<div class="bowl-pile"></div>' +
       '<svg class="bowl-label" viewBox="0 0 560 329" aria-hidden="true"><path id="bowl-arc-res" d="M60 160 Q280 234 500 160" fill="none"/><text text-anchor="middle"><textPath href="#bowl-arc-res" startOffset="50%">' + esc((nm || 'Sa gamelle').toUpperCase()) + '</textPath></text></svg></div>' +
-      '<div class="fs-rat"><p class="sr-k">Ration quotidienne estimée</p><p class="fs-big"><b>' + r.grams + '&nbsp;g</b> par jour</p>' +
-      '<p class="fs-meals"><b>' + r.meals + ' repas</b> d’environ <b>' + r.perMeal + '&nbsp;g</b></p>' +
-      '<p class="fx-sec">Estimation indicative, à ajuster avec <span class="nw"><a href="#veterinaires" class="step-link" data-vet-link>notre vétérinaire partenaire</a>.</span></p></div>' +
+      '<div class="fs-rat"><p class="fs-big"><b>' + r.grams + '&nbsp;g</b> par jour</p>' +
+      '<p class="fs-meals">' + mealsTxt(r.grams, r.meals) + '</p>' +
+      '<p class="fx-sec">Ration quotidienne estimée, à ajuster avec <span class="nw"><a href="#veterinaires" class="step-link" data-vet-link>notre vétérinaire partenaire</a>.</span></p></div>' +
       '</section>' +
-      '<section class="sr-bag" id="sr-bag" aria-label="Sac conseillé">' + bagCard(rec) + '</section>' +
-      silCard +
-      extraCard +
-      '<details class="result-how fx-acc"><summary>Sa silhouette en détail</summary>' +
-      '<p class="fx-sil-t">' + silTxt + '</p>' + advice.replace(/^<p class="res-sil[^>]*>[\s\S]*?<\/p>/, '') + vetBlock + '</details>' +
-      '<details class="result-how fx-acc"><summary>Comprendre le calcul</summary>' +
+      silRow +
+      '<section class="fx-menu fp" id="sr-bag" aria-labelledby="sr-bag-t"></section>' +
+      '<section class="fs-rem" id="sr-rem" aria-live="polite"></section>' +
+      extra +
+      '<details class="result-how fx-acc"><summary>Sa silhouette</summary>' +
+      '<p class="fx-sil-t">' + silTxt + ' Ce repère vient de vos réponses aux trois questions&nbsp;: ce n’est pas un diagnostic et il ne modifie pas la ration estimée.</p>' + advice.replace(/^<p class="res-sil[^>]*>[\s\S]*?<\/p>/, '') + vetBlock + '</details>' +
+      '<details class="result-how fx-acc"><summary>Comprendre le résultat</summary>' +
       '<ol class="fx-how">' +
       '<li><span class="fx-how-i" aria-hidden="true">🐾</span><p><b>Son énergie de base</b>À ' + fmtWeight(w) + '&nbsp;kg, il dépense environ ' + Math.round(r.rer) + '&nbsp;kcal par jour au repos.</p></li>' +
       '<li><span class="fx-how-i" aria-hidden="true">🌱</span><p><b>Le bonus croissance</b>À ' + age + '&nbsp;mois, il grandit encore&nbsp;: × ' + String(r.factor).replace('.', ',') + ', soit ' + Math.round(r.kcal) + '&nbsp;kcal par jour.</p></li>' +
-      '<li><span class="fx-how-i" aria-hidden="true">🥣</span><p><b>Dans sa gamelle</b>Converti en croquettes, cela fait ' + r.grams + '&nbsp;g par jour, en ' + r.meals + ' repas.</p></li>' +
-      '</ol><p class="fx-how-n">Le sac conseillé est le format dont la durée se rapproche le plus de ' + R.targetBagDays + '&nbsp;jours avec cette ration. Le repère de silhouette ne change pas ce calcul.</p></details>' +
-      (pateHow ? '<details class="result-how fx-acc"><summary>Les pâtées et sa ration</summary><p class="fx-how-n">Une pâtée remplace une partie des croquettes, à calories égales&nbsp;:</p><ul class="fx-how-l">' + pateHow + '</ul><p class="fx-how-n">Votre rappel de fin de sac reste calculé sur la ration en croquettes seules.</p></details>' : '') +
+      '<li><span class="fx-how-i" aria-hidden="true">🥣</span><p><b>Dans sa gamelle</b>Converti en croquettes, cela fait ' + r.grams + '&nbsp;g par jour.</p></li>' +
+      '</ol>' +
+      '<p class="fx-how-n">Seuls son poids et son âge entrent dans le calcul. Sa variété et sa silhouette servent à adapter nos conseils.</p>' +
+      (popts.length ? '<p class="fx-how-n">Une pâtée remplace une partie des croquettes à calories égales&nbsp;: ' + popts.map(function (o) { return '1 ' + o.unit + ' = ' + o.eq + '&nbsp;g'; }).join(', ') + '. Votre rappel reste calculé sur sa ration en croquettes seules.</p>' : '') +
+      '<p class="fx-how-n">Pesez-le chaque semaine&nbsp;: sa ration évolue avec lui.</p></details>' +
       '<div class="result-links"><button type="button" class="btn btn--text" data-edit>← Retour</button></div>' +
       '</div>';
 
@@ -678,7 +727,7 @@
     $('.calc-bar i', card).style.width = '100%'; $('.calc-bar', card).setAttribute('aria-valuenow', 3);
 
     // animations d'affichage
-    setResFormat(rec.id);
+    setResFormat(rec.id); renderResBag();
     var h = $('.result-title', box); if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
     scrollUnderHeader(card);
 
@@ -714,18 +763,7 @@
       $('#bcs-live-txt').textContent = answered ? 'Encore ' + (3 - answered) + ' question' + (3 - answered > 1 ? 's' : '') + '…' : 'Répondez aux trois questions pour voir son estimation.';
     }
   }
-  function bcsBlock(score) {
-    var cat = score <= 3 ? 'mince' : (score >= 6 ? 'ronde' : 'ideale');
-    var lbl = score <= 2 ? 'En dessous du repère idéal' : score === 3 ? 'Juste en dessous du repère idéal' : score <= 5 ? 'Repère idéal' : score === 6 ? 'Juste au-dessus du repère idéal' : 'Au-dessus du repère idéal';
-    var adv = cat === 'ideale' ? 'Côtes senties sans être vues, taille visible : sa silhouette correspond au repère « idéal » (4 à 5 sur 9).'
-      : cat === 'mince' ? 'Ses réponses le situent en dessous du repère idéal (4 à 5 sur 9).'
-      : 'Ses réponses le situent au-dessus du repère idéal (4 à 5 sur 9).';
-    adv += ' Chez un chiot, ce repère s’interprète avec sa croissance : faites-le confirmer par <span class="nw">l’un de nos</span> <a href="#veterinaires" class="step-link" data-vet-link>vétérinaires partenaires</a>.';
-    var pic = { mince: 'ribs-1', ideale: 'ribs-2', ronde: 'ribs-3' }[cat];
-    return '<div class="result-bcs" data-cat="' + cat + '" style="--s:' + score + '"><img class="rb-pic" src="' + BASE + 'assets/bcs/' + pic + '.webp" alt="" aria-hidden="true"><div class="rb-head"><p class="rb-k">Son indice de silhouette</p><p class="rb-v"><b>' + score + '</b>/9 <span>' + lbl + '</span></p></div>' +
-      '<div class="bcs-gauge" aria-hidden="true"><i class="bcs-mark"></i></div><div class="bcs-scale" aria-hidden="true"><span>1</span><span>4–5 · repère idéal</span><span>9</span></div>' +
-      '<p class="rb-adv">' + adv + '</p></div>';
-  }
+
 
   /* Pâtées : équivalence à apport énergétique égal (données config.pates + kcalPerKg) */
   function pateOptions(grams) {
@@ -1024,10 +1062,12 @@
         return;
       }
       if (t.closest('[data-res-cart]')) { openCart(); return; }
+      var adb = t.closest('[data-adult]');
+      if (adb) { var am = $('#age-adult-msg'), op = am.hidden; am.hidden = !op; adb.setAttribute('aria-expanded', String(op)); if (op) track('calculator_adult_info', {}); return; }
       var srf = t.closest('[data-sr-fmt]');
-      if (srf && calc.srBag) { var fid = srf.getAttribute('data-sr-fmt'), bx = $('#sr-bag'); if (bx) bx.innerHTML = calc.srBag(fmtById(fid)); setResFormat(fid); track('formula_chosen', { format: fid, from: 'result' }); var nb = bx && bx.querySelector('[data-sr-fmt="' + fid + '"]'); if (nb) nb.focus(); return; }
+      if (srf) { var fid = srf.getAttribute('data-sr-fmt'); setResFormat(fid); renderResBag(); track('formula_chosen', { format: fid, from: 'result' }); var nb = $('#sr-bag [data-sr-fmt="' + fid + '"]'); if (nb) nb.focus(); return; }
       var sra = t.closest('[data-sr-add]');
-      if (sra) { var af = fmtById(sra.getAttribute('data-sr-add')); addToCart(af.id, 1, 'result_bag', true); var m1 = sra.parentNode.querySelector('.res-added'); if (m1) m1.innerHTML = '✓ Sac de ' + esc(af.label) + ' ajouté au panier. <button type="button" class="btn btn--text btn--sm" data-res-cart>Voir le panier</button>'; return; }
+      if (sra) { var af = fmtById(sra.getAttribute('data-sr-add')); addToCart(af.id, 1, 'result_bag', true); var m1 = $('#sr-bag .res-added'); if (m1) m1.innerHTML = '✓ Sac de ' + esc(af.label) + ' ajouté au panier. <button type="button" class="btn btn--text btn--sm" data-res-cart>Voir le panier</button>'; return; }
       var srp = t.closest('[data-sr-pate]');
       if (srp) { var pf = fmtById(srp.getAttribute('data-sr-pate')); addToCart(pf.id, 1, 'result_complement', true); var m2 = srp.parentNode.querySelector('.res-added'); if (m2) m2.innerHTML = '✓ ' + esc(pf.name) + ' ajoutée au panier. <button type="button" class="btn btn--text btn--sm" data-res-cart>Voir le panier</button>'; return; }
       var mxb = t.closest('[data-mix]'); if (mxb) { setMix(mxb.getAttribute('data-mix')); return; }
@@ -1110,62 +1150,109 @@
   }
 
   /* ======================================================================
-     8. Checkout de démonstration
+     8. Commande : livraison, paiement simulé (aucune donnée bancaire), confirmation
      ====================================================================== */
+  function paintCheckoutTotals() {
+    var t = cartTotals();
+    $('#order-lines').innerHTML = cart.map(function (i) {
+      var f = fmtById(i.id);
+      return '<div class="order-line"><div class="thumb">' + itemThumb(f) + '</div><div><strong>' + esc(itemName(f)) + '</strong><br><small>' + (f.extra ? '' : 'Sac de ') + esc(f.label) + ' × ' + i.qty + ' · ' + eur(f.price) + ' l’unité</small></div><strong>' + eur(f.price * i.qty) + '</strong></div>';
+    }).join('');
+    $('#order-totals').innerHTML = '<div><dt>Sous-total</dt><dd>' + eur(t.sub) + '</dd></div>' +
+      (t.disc ? '<div class="tot-disc"><dt>Parrainage (−' + Math.round(REF.discount * 100) + '&nbsp;% sur un sac)</dt><dd>−' + eur(t.disc) + '</dd></div>' : '') +
+      '<div><dt>' + esc(CFG.shipping.label) + '</dt><dd>' + (t.ship ? eur(t.ship) : 'Offerte') + '</dd></div><div class="grand"><dt>Total</dt><dd>' + eur(t.total) + '</dd></div>' +
+      (t.ship ? '<p class="co-left">Plus que ' + eur(t.left) + ' de produits pour la livraison offerte.</p>' : '');
+    var rm = $('#co-ref-msg'); if (rm) rm.innerHTML = t.code ? 'Code ' + esc(t.code) + ' appliqué&nbsp;: −' + eur(t.disc) + ' sur un sac de croquettes.' : esc(t.codeMsg);
+    var ri = $('#co-ref'); if (ri && document.activeElement !== ri) ri.value = store.get('tc_cart_code', '');
+    var pb = $('#co-pay-btn'); if (pb) pb.textContent = 'Valider et payer ' + eur(t.total) + ' (simulé)';
+    return t;
+  }
+  function coStep(n) {
+    $$('#checkout [data-co-step]').forEach(function (s) { s.hidden = +s.getAttribute('data-co-step') !== n; });
+    $$('#checkout [data-co-ind]').forEach(function (li) { var k = +li.getAttribute('data-co-ind'); li.classList.toggle('is-on', k === n); li.classList.toggle('is-done', k < n); });
+  }
   function openCheckout() {
     var dlg = $('#checkout'); if (!dlg) return;
     if (!cart.length) { toast('Votre panier est vide.'); return; }
     closeCart();
-    var t = cartTotals();
-    $('#order-lines').innerHTML = cart.map(function (i) {
-      var f = fmtById(i.id);
-      return '<div class="order-line"><div class="thumb">' + itemThumb(f) + '</div><div><strong>' + esc(itemName(f)) + '</strong><br><small>' + (f.extra ? '' : 'Sac de ') + esc(f.label) + ' × ' + i.qty + '</small></div><strong>' + eur(f.price * i.qty) + '</strong></div>';
-    }).join('');
-    $('#order-totals').innerHTML = '<div><dt>Sous-total</dt><dd>' + eur(t.sub) + '</dd></div><div><dt>' + esc(CFG.shipping.label) + '</dt><dd>' + (t.ship ? eur(t.ship) : 'Offerte') + '</dd></div><div class="grand"><dt>Total</dt><dd>' + eur(t.total) + '</dd></div>';
+    var t = paintCheckoutTotals();
     var grid = $('#source-grid');
     if (!grid.children.length) grid.innerHTML = CFG.acquisitionSources.map(function (s) { return '<label class="pill"><input type="radio" name="source" value="' + s.id + '"><span>' + esc(s.label) + '</span></label>'; }).join('');
+    var nm = pupName(); var fi = $('#co-first'); if (fi && !fi.value) { var club = store.get('tc_club', null); if (club && club.email && !$('#co-email').value) $('#co-email').value = club.email; }
+    $('#co-msg').textContent = '';
+    coStep(1);
     $('#checkout-form-view').hidden = false; $('#checkout-done-view').hidden = true;
     if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
-    // ÉVÉNEMENT : ouverture du checkout
-    track('checkout_started', { currency: CFG.site.currency, value: +t.total.toFixed(2), items: gaItems(), demo_mode: true });
+    track('checkout_started', { currency: CFG.site.currency, value: +t.total.toFixed(2), items: gaItems(), simulated_payment: true });
   }
   function closeCheckout() { var dlg = $('#checkout'); if (dlg && dlg.open) dlg.close(); }
+
+  /* Durées après commande : seules les lignes de croquettes comptent (jamais une pâtée) */
+  function orderCoverage(items) {
+    var bags = items.filter(function (i) { var f = fmtById(i.id); return f && !f.extra; });
+    if (!bags.length || !ration || !ration.grams) return { bags: bags, txt: '' };
+    var first = fmtById(bags[0].id), per = bagDays(first, ration.grams), kg = 0, n = 0;
+    bags.forEach(function (i) { kg += fmtById(i.id).kg * i.qty; n += i.qty; });
+    var total = Math.floor(kg * 1000 / ration.grams);
+    return { bags: bags, first: first, per: per, total: total, n: n,
+      txt: 'Avec sa ration actuelle (' + ration.grams + '&nbsp;g par jour), un sac ouvert de ' + esc(first.label) + ' dure environ <strong>' + per + '&nbsp;jours</strong>' + (n > 1 ? '&nbsp;; vos ' + n + ' sacs couvrent environ <strong>' + total + '&nbsp;jours</strong>' : '') + '. Estimation&nbsp;: sa ration évolue pendant la croissance.' };
+  }
 
   function initCheckout() {
     var dlg = $('#checkout'); if (!dlg) return;
     $$('[data-close-checkout]').forEach(function (b) { b.addEventListener('click', closeCheckout); });
-    dlg.addEventListener('click', function (e) { if (e.target === dlg) closeCheckout(); });
+    dlg.addEventListener('click', function (e) {
+      if (e.target === dlg) { closeCheckout(); return; }
+      if (e.target.closest('[data-co-ref]')) { store.set('tc_cart_code', ($('#co-ref').value || '').trim().toUpperCase()); paintCheckoutTotals(); renderCart(); return; }
+      if (e.target.closest('[data-co-back]')) { coStep(1); return; }
+      if (e.target.closest('[data-co-next]')) {
+        var need = ['co-first', 'co-last', 'co-email', 'co-addr', 'co-cp', 'co-city'], bad = null;
+        need.forEach(function (id) { var el = $('#' + id), v = (el.value || '').trim(), ok = !!v && (id !== 'co-email' || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) && (id !== 'co-cp' || /^\d{5}$/.test(v)); el.setAttribute('aria-invalid', String(!ok)); if (!ok && !bad) bad = el; });
+        if (bad) { $('#co-msg').textContent = 'Complétez vos coordonnées et votre adresse de livraison (code postal à 5 chiffres).'; bad.focus(); return; }
+        $('#co-msg').textContent = '';
+        var t = paintCheckoutTotals();
+        $('#co-ship').innerHTML = '<p class="co-k">Livraison</p><p>' + esc($('#co-first').value.trim() + ' ' + $('#co-last').value.trim()) + '<br>' + esc($('#co-addr').value.trim()) + '<br>' + esc($('#co-cp').value.trim() + ' ' + $('#co-city').value.trim()) + '</p><p>' + (t.ship ? 'Livraison&nbsp;: ' + eur(t.ship) : 'Livraison offerte') + '</p>';
+        coStep(2); track('checkout_shipping_done', {}); var pb = $('#co-pay-btn'); if (pb) pb.focus(); return;
+      }
+    });
     $('#checkout-form').addEventListener('submit', function (e) {
       e.preventDefault();
+      if ($('[data-co-step="2"]').hidden) { var nx = $('[data-co-next]'); if (nx) nx.click(); return; }
       var t = cartTotals(), src = ($('input[name="source"]:checked', dlg) || {}).value || '';
-      var name = $('#co-name').value.trim();
+      var first = $('#co-first').value.trim();
       var order = {
-        id: 'TC-' + Math.random().toString(36).slice(2, 7).toUpperCase(),
-        ts: Date.now(), total: t.total,
-        items: cart.map(function (i) { var f = fmtById(i.id); return { id: i.id, qty: i.qty, label: f.label, kg: f.kg, price: f.price }; }),
-        source: src, demo: true
+        id: 'TC-' + new Date().getFullYear() + '-' + Math.random().toString(36).slice(2, 7).toUpperCase(),
+        ts: Date.now(), status: 'validée', sub: t.sub, discount: t.disc, shipping: t.ship, total: t.total, refCodeUsed: t.code || '',
+        items: cart.map(function (i) { var f = fmtById(i.id); return { id: i.id, qty: i.qty, label: f.label, kg: f.kg || 0, price: f.price, extra: !!f.extra }; }),
+        ship: { first: first, last: $('#co-last').value.trim(), email: $('#co-email').value.trim(), tel: $('#co-tel').value.trim(), addr: $('#co-addr').value.trim(), cp: $('#co-cp').value.trim(), city: $('#co-city').value.trim() },
+        source: src, simulatedPayment: true
       };
+      var all = store.get('tc_orders', []) || []; var isFirst = !validOrders().length; all.push(order); store.set('tc_orders', all);
       store.set('tc_last_order', order);
+      store.set('tc_cart_code', '');
+      var code = myRefCode();
       document.dispatchEvent(new CustomEvent('tc:order'));
       if (src) track('acquisition_source_declared', { source: src });
-      track('demo_order_completed', { transaction_id: order.id, currency: CFG.site.currency, value: +t.total.toFixed(2), items: gaItems(), source: src || 'non_renseigne', demo_mode: true });
+      track('purchase', { transaction_id: order.id, currency: CFG.site.currency, value: +t.total.toFixed(2), shipping: t.ship, discount: t.disc, items: gaItems(), simulated_payment: true });
       var wantsReminder = $('#co-reminder').checked;
       cart = []; saveCart();
-      var first = order.items[0], days = ration ? bagDays(fmtById(first.id), ration.grams) * first.qty : null;
+      var cov = orderCoverage(order.items);
       var done = $('#checkout-done-view');
       done.innerHTML =
         '<div class="done"><div class="tick"><svg width="44" height="44" aria-hidden="true"><use href="#i-check"/></svg></div>' +
-        '<h2>Merci' + (name ? ' ' + esc(name) : '') + ' !</h2>' +
-        '<p>Votre précommande est notée.<br>Aucun paiement n’a été demandé aujourd’hui.</p>' +
+        '<h2>Merci' + (first ? ' ' + esc(first) : '') + '&nbsp;! Votre commande est validée.</h2>' +
         '<p class="order-no">' + order.id + '</p>' +
-        (days ? '<p>Avec la ration estimée (' + ration.grams + ' g par jour), votre sac devrait durer environ <strong>' + days + ' jours</strong>.</p>' : '') +
-        '<div class="done-ref"><p><b>Parrainez un ami teckel&nbsp;!</b> Son premier sac est à −20&nbsp;% avec votre code, et au 3<sup>e</sup> filleul votre prochain sac de 2&nbsp;kg est offert.</p><p class="done-code"><code>' + esc(((name || 'TECKEL').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 10) || 'TECKEL') + '20') + '</code><button type="button" class="btn btn--ghost btn--sm" data-copy-code>Copier</button></p></div>' +
-        '<div><button type="button" class="btn btn--primary btn--lg" data-go-reminder>Préparer mon rappel de fin de sac</button> <button type="button" class="btn btn--ghost btn--lg" data-close-checkout>Fermer</button></div></div>';
+        '<p>Total ' + eur(order.total) + (order.discount ? ', dont ' + eur(order.discount) + ' de réduction parrainage' : '') + (order.shipping ? ', livraison ' + eur(order.shipping) : ', livraison offerte') + '. Un récapitulatif est enregistré sur cet appareil (paiement simulé&nbsp;: rien n’a été encaissé).</p>' +
+        (cov.txt ? '<p>' + cov.txt + '</p>' : '') +
+        (isFirst ? '<div class="done-gift"><p><b>🎁 Votre bilan de croissance est offert.</b> Un bilan offert après votre première commande, chez une clinique partenaire TeckCare.</p><a class="btn btn--ghost btn--sm" href="#veterinaires" data-close-checkout>Réserver mon bilan</a></div>' : '') +
+        '<div class="done-ref"><p><b>Parrainez un ami teckel.</b> Avec votre code, son premier sac de croquettes est à −20&nbsp;%. Après trois filleuls ayant passé leur première commande, un sac de 2&nbsp;kg vous est offert.</p><p class="done-code"><code>' + esc(code) + '</code><button type="button" class="btn btn--ghost btn--sm" data-copy-code>Copier</button></p></div>' +
+        '<div class="done-acts">' + (cov.bags.length ? '<button type="button" class="btn btn--primary btn--lg" data-go-reminder>Préparer mon rappel de fin de sac</button> ' : '') + '<button type="button" class="btn btn--ghost btn--lg" data-close-checkout>Fermer</button></div></div>';
+      coStep(3);
       $('#checkout-form-view').hidden = true; done.hidden = false;
       $$('[data-close-checkout]', done).forEach(function (b) { b.addEventListener('click', closeCheckout); });
-      $('[data-go-reminder]', done).addEventListener('click', function () { closeCheckout(); goReminder(); });
+      var gr = $('[data-go-reminder]', done); if (gr) gr.addEventListener('click', function () { closeCheckout(); goReminder(); });
       refreshLoyalty();
-      if (wantsReminder) { closeCheckout(); setTimeout(goReminder, 150); }
+      if (wantsReminder && cov.bags.length) { closeCheckout(); setTimeout(goReminder, 150); }
     });
   }
 
@@ -1257,7 +1344,8 @@
     var sel = $('#rem-format'); if (!sel) return;
     var prev = sel.value, lo = lastOrder();
     if (!sel.options.length) sel.innerHTML = FORMATS.map(function (f) { return '<option value="' + f.id + '">' + esc(f.label) + ' — ' + eur(f.price) + '</option>'; }).join('');
-    var wanted = (lo && lo.items[0] && lo.items[0].id) || (ration && ration.rec) || prev || selectedFormat;
+    var loBag = lo && (lo.items || []).filter(function (i) { var f = fmtById(i.id); return f && !f.extra; })[0];
+    var wanted = (calc.resFmt) || (loBag && loBag.id) || (ration && ration.rec) || prev || selectedFormat;
     if (fmtById(wanted)) sel.value = wanted;
     if (!$('#rem-start').value) $('#rem-start').value = toISODate(new Date());
     if (!$('#rem-grams').value && ration) $('#rem-grams').value = ration.grams;
@@ -1265,7 +1353,7 @@
 
     // carte « Recommander le même sac » (facultative)
     if (!$('#reorder-bag')) return;
-    var rid = (lo && lo.items[0] && lo.items[0].id) || (ration && ration.rec) || selectedFormat, f = fmtById(rid) || FORMATS[0];
+    var rid = (loBag && loBag.id) || (ration && ration.rec) || selectedFormat, f = fmtById(rid) || FORMATS[0]; if (f.extra) f = FORMATS[0];
     $('#reorder-bag').innerHTML = bagSVG(f.kg);
     $('#reorder-name').textContent = CFG.product.name + ' — ' + f.label;
     $('#reorder-sub').textContent = lo ? 'Votre dernière commande, le ' + dateFr(new Date(lo.ts)) + '. Un clic suffit.' : 'Après votre première commande, votre dernier sac apparaîtra ici.';
@@ -1296,6 +1384,11 @@
       setMsg('Rappel téléchargé : ouvrez le fichier pour l’ajouter à votre calendrier (le ' + dateFr(c.rem) + ').', true);
     });
 
+    form.addEventListener('change', function (e) {
+      if (e.target.name !== 'rem-way') return;
+      $$('[data-rem-pane]', form).forEach(function (p) { p.hidden = p.getAttribute('data-rem-pane') !== e.target.value; });
+      setMsg('', true);
+    });
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var c = computeReminder(), email = $('#rem-email').value.trim();
@@ -1310,7 +1403,7 @@
         safe(function () { fetch(CFG.reminder.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rec) }); });
         setMsg('Demande envoyée : vous serez prévenu(e) vers le ' + dateFr(c.rem) + '. Désinscription possible à tout moment.', true);
       } else {
-        setMsg('Demande enregistrée. Pour ne rien oublier, ajoutez aussi le rappel à votre agenda.', true);
+        setMsg('Demande de rappel enregistrée pour le ' + dateFr(c.rem) + ', à l’adresse ' + email + '.', true);
       }
     });
 
@@ -1475,7 +1568,7 @@ document.addEventListener('click', function (e) {
   function prefill() {
     var k = known();
     if (k.name && !dog.value) dog.value = k.name;
-    var who = document.getElementById('club-letter-who'); if (who) who.textContent = k.name || 'Votre chiot';
+    var who = document.getElementById('club-letter-who'); if (who) who.textContent = k.name || 'Votre teckel';
     if (k.age) { ageP.hidden = false; ageP.innerHTML = '🎂 Sa lettre sera adaptée à son âge&nbsp;: <b>' + (k.age >= 24 ? Math.floor(k.age / 12) + '&nbsp;ans' : k.age + '&nbsp;mois') + '</b> (d’après le calculateur).'; }
     else ageP.hidden = true;
   }
@@ -1503,13 +1596,13 @@ document.addEventListener('click', function (e) {
     track('club_signup_complete', { interests: ints.join(','), age_known: !!rec.age });
     var nm = rec.dog ? esc(rec.dog) + ' et vous' : 'vous deux';
     form.innerHTML = '<div class="club-done" tabindex="-1"><p class="club-done-i" aria-hidden="true">🐾</p><h3>Bienvenue au club, ' + nm + '&nbsp;!</h3>' +
-      '<p>Votre première lettre arrive à <b>' + esc(email) + '</b>.</p>' +
+      '<p>Inscription enregistrée pour <b>' + esc(email) + '</b>.</p>' +
       '<ul class="club-prefs"><li>Centres d’intérêt&nbsp;: ' + ints.map(function (i) { return i === 'conseils' ? 'les conseils' : 'les rencontres'; }).join(' et ') + '</li>' +
       (rec.cp ? '<li>Rencontres autour de ' + esc(rec.cp) + '</li>' : '') +
       (rec.age ? '<li>Lettre adaptée à ses ' + rec.age + '&nbsp;mois</li>' : '') + '</ul>' +
       (rec.age ? '' : '<div class="club-bd"><label for="club-bd">Son mois de naissance <small>(pour une lettre adaptée à son âge)</small></label><span><input type="month" id="club-bd" max="' + new Date().toISOString().slice(0, 7) + '"><button type="button" class="btn btn--ghost btn--sm" data-club-bd>Enregistrer</button></span><p class="club-help" id="club-bd-msg" role="status"></p></div>') +
       '<div class="club-next"><a class="btn btn--primary btn--sm" href="#conseils" data-club-link="conseils">Lire nos articles</a>' +
-      (rec.interests.indexOf('rencontres') > -1 ? '<a class="btn btn--ghost btn--sm" href="#club" data-club-link="rencontres" data-club-walk>Voir comment se passent les balades</a>' : '<a class="btn btn--ghost btn--sm" href="#sante" data-club-link="veto">Trouver un vétérinaire</a>') + '</div></div>';
+      (rec.interests.indexOf('rencontres') > -1 ? '<a class="btn btn--ghost btn--sm" href="#club" data-club-link="rencontres" data-club-walk>Voir les prochaines balades</a>' : '<a class="btn btn--ghost btn--sm" href="#sante" data-club-link="veto">Trouver un vétérinaire</a>') + '</div></div>';
     var d = form.querySelector('.club-done'); if (d) d.focus();
   });
 
@@ -1518,7 +1611,7 @@ document.addEventListener('click', function (e) {
     if (a) {
       var done = !!a.closest('.club-done');
       track(a.getAttribute('data-club-link') === 'rencontres' ? 'club_events_click' : 'club_content_click', { target: a.getAttribute('data-club-link'), from: done ? 'confirmation' : 'apercu', href: a.getAttribute('href') });
-      if (a.hasAttribute('data-club-walk')) { e.preventDefault(); var w = document.querySelector('.club-walk'); if (w) { w.scrollIntoView({ block: 'center', behavior: 'smooth' }); w.classList.add('is-hi'); setTimeout(function () { w.classList.remove('is-hi'); }, 1600); } }
+      if (a.hasAttribute('data-club-walk')) { e.preventDefault(); var w = document.querySelector('.club-events'); if (w) { w.scrollIntoView({ block: 'center', behavior: 'smooth' }); w.classList.add('is-hi'); setTimeout(function () { w.classList.remove('is-hi'); }, 1600); } }
     }
     if (e.target.closest && e.target.closest('[data-club-bd]')) {
       var v = (document.getElementById('club-bd') || {}).value, out = document.getElementById('club-bd-msg');
@@ -1532,6 +1625,61 @@ document.addEventListener('click', function (e) {
   });
 })();
 
+
+/* Balades du club : organisées par TeckCare, gratuites, sur inscription, places limitées (contrôle local des places) */
+(function () {
+  var list = document.getElementById('club-ev-list'); if (!list) return;
+  var EV = (window.TECKCARE_CONFIG && window.TECKCARE_CONFIG.walks) || [];
+  function getJ(k, d) { try { var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (x) { return d; } }
+  function setJ(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (x) {} }
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function track(n, p) { try { if (window.tcTrack) window.tcTrack(n, p || {}); } catch (x) {} }
+  var JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'], MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  function when(e) { var d = new Date(e.date + 'T' + e.time + ':00'); return JOURS[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS[d.getMonth()] + ' à ' + e.time.replace(':', ' h ').replace(' 00', '').replace(/ h $/, ' h'); }
+  function regs() { return getJ('tc_walks', {}); }
+  function left(e) { return Math.max(0, e.places - (regs()[e.id] ? 1 : 0)); }
+  function paint(openId, msg) {
+    var now = Date.now(), r = regs(), fut = EV.filter(function (e) { return new Date(e.date + 'T' + e.time + ':00').getTime() > now; });
+    if (!fut.length) { list.innerHTML = '<li class="club-ev-none">Les prochaines dates seront annoncées ici et dans la lettre du club.</li>'; return; }
+    var club = getJ('tc_club', null) || {};
+    list.innerHTML = fut.map(function (e) {
+      var mine = r[e.id], l = left(e);
+      return '<li class="club-ev' + (mine ? ' is-mine' : '') + '" id="ev-' + e.id + '"><div class="club-ev-i"><p class="club-ev-city">' + esc(e.city) + '</p><p class="club-ev-when">' + esc(when(e)) + '</p><p class="club-ev-where">' + esc(e.place) + ' · ' + esc(e.duration) + '</p></div>' +
+        '<div class="club-ev-a"><p class="club-ev-left">' + (l ? l + ' place' + (l > 1 ? 's' : '') + ' disponible' + (l > 1 ? 's' : '') : 'Complet') + '</p>' +
+        (mine ? '<p class="club-ev-ok">✓ Inscrit(e)</p><button type="button" class="btn btn--text btn--sm" data-ev-cancel="' + e.id + '">Annuler mon inscription</button>'
+          : (l ? '<button type="button" class="btn btn--ghost btn--sm" data-ev-open="' + e.id + '" aria-expanded="' + (openId === e.id) + '">S’inscrire</button>' : '')) + '</div>' +
+        (openId === e.id && !mine ? '<form class="club-ev-form" data-ev-form="' + e.id + '" novalidate><label for="ev-mail-' + e.id + '">Votre e-mail</label><span><input type="email" id="ev-mail-' + e.id + '" autocomplete="email" value="' + esc(club.email || '') + '" required><button type="submit" class="btn btn--primary btn--sm">Confirmer</button></span><small>Une place pour vous et votre teckel. Gratuit.</small></form>' : '') +
+        (msg && msg.id === e.id ? '<p class="club-ev-msg" role="status">' + msg.t + '</p>' : '') + '</li>';
+    }).join('');
+    if (openId) { var i = document.getElementById('ev-mail-' + openId); if (i) i.focus(); }
+  }
+  list.addEventListener('click', function (e) {
+    var o = e.target.closest('[data-ev-open]'); if (o) { paint(o.getAttribute('data-ev-open')); return; }
+    var c = e.target.closest('[data-ev-cancel]');
+    if (c) { var id = c.getAttribute('data-ev-cancel'), r = regs(); delete r[id]; setJ('tc_walks', r); paint(null, { id: id, t: 'Inscription annulée : votre place est libérée.' }); track('club_walk_cancel', { event: id }); }
+  });
+  list.addEventListener('submit', function (e) {
+    var f = e.target.closest('[data-ev-form]'); if (!f) return; e.preventDefault();
+    var id = f.getAttribute('data-ev-form'), ev = EV.filter(function (x) { return x.id === id; })[0], mail = (f.querySelector('input').value || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(mail)) { f.querySelector('input').setAttribute('aria-invalid', 'true'); f.querySelector('small').textContent = 'Indiquez une adresse e-mail valide.'; return; }
+    if (!ev || left(ev) < 1) { paint(null, { id: id, t: 'Cette balade est complète.' }); return; }
+    var r = regs(); r[id] = { email: mail, ts: Date.now() }; setJ('tc_walks', r);
+    paint(null, { id: id, t: 'Inscription confirmée : ' + esc(ev.place) + ', ' + esc(when(ev)) + '. À bientôt&nbsp;!' });
+    track('club_walk_signup', { event: id, city: ev.city });
+  });
+  paint();
+
+  /* Parrainage : code personnel après la première commande, suivi « X filleul(s) sur 3 » */
+  function paintRef() {
+    var box = document.getElementById('club-refer-me'); if (!box) return;
+    var ref = getJ('tc_ref', null), orders = (getJ('tc_orders', []) || []).filter(function (o) { return o.status !== 'annulée'; });
+    if (!ref || !orders.length) { box.innerHTML = '<p class="club-help">Votre code personnel s’affiche après votre première commande.</p>'; return; }
+    var n = Math.min(3, ref.referrals || 0);
+    box.innerHTML = '<p class="done-code"><code>' + esc(ref.code) + '</code><button type="button" class="btn btn--ghost btn--sm" data-copy-code>Copier</button></p><p class="club-help">' + n + ' filleul' + (n > 1 ? 's' : '') + ' sur 3 · seules les premières commandes validées comptent, pas les commandes annulées.</p>';
+  }
+  paintRef();
+  document.addEventListener('tc:order', paintRef);
+})();
 
 /* Code parrain proposé après la commande */
 document.addEventListener('click', function (e) {

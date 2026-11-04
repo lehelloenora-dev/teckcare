@@ -11,9 +11,8 @@ window.TECKCARE_CONFIG = {
   site: {
     name: "TeckCare",
     // À COMPLÉTER : l'adresse publique du site (sert aux balises canonical / OG / sitemap)
-    url: "https://VOTRE-PSEUDO.github.io/teckcare/",
-    // À COMPLÉTER : une vraie adresse de contact
-    contactEmail: "contact@teckcare.example",
+    url: "https://lehelloenora-dev.github.io/teckcare/",
+    contactEmail: "",   // aucune adresse de contact opérationnelle pour ce prototype
     currency: "EUR"
   },
 
@@ -40,8 +39,8 @@ window.TECKCARE_CONFIG = {
       hero_cta_label: {
         description: "Libellé du bouton du champ prénom (hero)",
         variants: {
-          A: { weight: 50, text: "Créer son sac" },
-          B: { weight: 50, text: "Créer sa gamelle" }
+          A: { weight: 50, text: "Préparer sa gamelle" },
+          B: { weight: 50, text: "Préparer sa gamelle" }
         }
       }
     }
@@ -70,8 +69,19 @@ window.TECKCARE_CONFIG = {
      kcalPer100g : énergie de travail pour retirer l'équivalent en croquettes. */
   pates: { gourmande: { label: "Pâtée gourmande", grams: 80, kcalPer100g: 100 }, nomade: { label: "Pâtée nomade", grams: 100, kcalPer100g: 100 } },
 
-  /* ---------- Livraison (FICTIF) ---------- */
-  shipping: { fee: 0, label: "Livraison", note: "" },
+  /* ---------- Livraison ---------- */
+  shipping: { fee: 3.90, freeFrom: 39, label: "Livraison" },   // offerte dès 39 € de produits après réduction
+
+  /* ---------- Balades du club (exemples de dates futures, organisées par TeckCare) ---------- */
+  walks: [
+    { id: "paris-2026-11-21", city: "Paris", place: "Parc Montsouris, entrée avenue Reille", date: "2026-11-21", time: "10:00", duration: "1 h", places: 12 },
+    { id: "lyon-2026-11-29", city: "Lyon", place: "Parc de la Tête d’Or, entrée des Enfants du Rhône", date: "2026-11-29", time: "10:30", duration: "1 h", places: 10 },
+    { id: "bordeaux-2026-12-05", city: "Bordeaux", place: "Jardin public, entrée cours de Verdun", date: "2026-12-05", time: "10:00", duration: "1 h", places: 10 },
+    { id: "nantes-2026-12-12", city: "Nantes", place: "Jardin des plantes, entrée boulevard de Stalingrad", date: "2026-12-12", time: "14:30", duration: "1 h", places: 8 }
+  ],
+
+  /* ---------- Parrainage ---------- */
+  referral: { discount: 0.20, rewardAfter: 3, rewardFormat: "poulet-saumon-2kg" },
 
   /* ---------- Formule de ration — ESTIMATION CONFIGURABLE (À VALIDER) ----------
      Méthode : besoin énergétique = coef × poids^exposant (« RER »)
