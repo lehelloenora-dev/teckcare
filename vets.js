@@ -88,7 +88,7 @@
 
   /* ---------- API Overpass (OpenStreetMap) avec cache local ---------- */
   /* Instances publiques listées sur le wiki OSM ; une seule requête à la fois, pause de 30 s après un 429/406 */
-  var ENDPOINTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+  var ENDPOINTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
   var inflight = null, pauseUntil = 0;
   var TTL = 7 * 24 * 3600 * 1000, memCache = {};
   /* ---------- Réseau : journal des requêtes et classement des erreurs ---------- */
@@ -177,7 +177,7 @@
     if (hit && Date.now() - hit.ts < TTL) { logReq({ service: 'Établissements (cache local, requête Overpass précédente)', url: q, status: 'cache', ms: 0, count: hit.data.els.length }); return Promise.resolve({ data: hit.data, cached: true }); }
     if (Date.now() < pauseUntil) { var pe = new Error('pause'); pe.kind = 'http'; pe.http = 429; pe.wait = Math.ceil((pauseUntil - Date.now()) / 1000); return Promise.reject(pe); }
     if (inflight) try { inflight.abort(); } catch (e) {}
-    var i = 0, mine = null;
+    var i = 0, mine = null, retried = false;
     function attempt() {
       return getJSON('Établissements (Overpass · ' + hostOf(ENDPOINTS[i]) + ')', ENDPOINTS[i], {
         method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 30000,
@@ -192,6 +192,7 @@
         })
         .catch(function (e) {
           if (e.kind !== 'aborted' && e.kind !== 'csp' && i < ENDPOINTS.length - 1) { i++; return attempt(); }
+          if ((e.http === 502 || e.http === 503 || e.http === 504 || e.kind === 'timeout') && !retried) { retried = true; i = 0; return new Promise(function (r) { setTimeout(r, 2500); }).then(attempt); }
           if (e.http === 429 || e.http === 406) { pauseUntil = Date.now() + 30000; e.wait = 30; }
           throw e;
         });
