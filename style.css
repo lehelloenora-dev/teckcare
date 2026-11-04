@@ -3531,3 +3531,12 @@ main [id]{scroll-margin-top:calc(var(--top,80px) + 18px)}
 .done-gift p{margin:0 0 8px}
 .done-acts{margin-top:12px}
 .at-list li .at-vid{display:block;flex:none;width:100%;height:auto;aspect-ratio:16/10;object-fit:cover;object-position:center;background:#EFE6D6}
+/* Pourquoi TeckCare : la vidéo en grand au centre, les deux autres cartes de chaque côté */
+@media (min-width:900px){
+  .at-list{grid-template-columns:minmax(0,1fr) minmax(0,1.7fr) minmax(0,1fr);align-items:center}
+  .at-list li:nth-child(1){order:2}
+  .at-list li:nth-child(2){order:1}
+  .at-list li:nth-child(3){order:3}
+  .at-list li:nth-child(1) div{padding:16px 20px 18px;text-align:center}
+  .at-list li:nth-child(1) b{font-size:1.25rem!important}
+}
