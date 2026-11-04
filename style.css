@@ -3530,3 +3530,4 @@ main [id]{scroll-margin-top:calc(var(--top,80px) + 18px)}
 .done-gift{margin:12px 0;padding:12px 14px;border-radius:var(--r-m);background:var(--pista-l)}
 .done-gift p{margin:0 0 8px}
 .done-acts{margin-top:12px}
+.at-list li .at-vid{display:block;flex:none;width:100%;height:auto;aspect-ratio:16/10;object-fit:cover;object-position:center;background:#EFE6D6}
