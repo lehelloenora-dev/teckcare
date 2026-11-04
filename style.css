@@ -3381,3 +3381,47 @@ main [id]{scroll-margin-top:calc(var(--top,80px) + 18px)}
 /* Vidéo « Pourquoi TeckCare » */
 .at-video{margin:0 auto 22px;max-width:980px;border-radius:var(--r-l);overflow:hidden;background:#EFE6D6;box-shadow:0 22px 40px -30px rgba(74,36,16,.55)}
 .at-video video{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover}
+/* Calculateur : repère de silhouette à l'étape 2 */
+.bcs-live.is-set #bcs-live-txt{display:flex;align-items:center;gap:14px;margin:0}
+.bcs-live-pic{width:120px;height:auto;flex:none}
+#bcs-live-txt>span{display:grid;gap:2px}
+.bcs-live-k{font:800 .68rem/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--pista-d)}
+#bcs-live-txt b{font:600 1.1rem/1.2 var(--display);color:var(--ink)}
+#bcs-live-txt small{font-size:.82rem;color:var(--muted)}
+.bcs-live[data-cat="mince"].is-set,.bcs-live[data-cat="ronde"].is-set{background:#F6E6D3}
+.bcs-live[data-cat="ideale"].is-set{background:var(--pista-l)}
+/* Résultat simplifié */
+.sr .sr-k{margin:0 0 4px;font:800 .7rem/1.2 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--pista-d)}
+.sr .sr-k span{margin-left:4px;padding:2px 8px;border-radius:999px;background:#fff;letter-spacing:.06em;color:var(--muted)}
+.sr .fs-meals b{color:var(--ink)}
+.sr-bag{display:grid;grid-template-columns:110px minmax(0,1fr);gap:16px;align-items:center;margin:16px 0 0;padding:16px 18px;border-radius:var(--r-m);background:#FFFAF0;border:1.5px solid var(--pista)}
+.sr-bag-img{width:100%;height:auto;max-height:160px;object-fit:contain}
+.sr-bag-n{margin:0;font-size:.95rem;color:var(--ink)}
+.sr-bag-p{margin:4px 0 10px;font-size:1.02rem}
+.sr-bag-p b:first-child{font:600 1.35rem var(--display);color:var(--ink)}
+.sr-fmt{display:flex;gap:6px;margin:0 0 12px;flex-wrap:wrap}
+.sr-fmt-b{padding:6px 14px;border-radius:999px;border:1.5px solid var(--line);background:#fff;font:700 .88rem var(--sans);color:var(--ink);cursor:pointer}
+.sr-fmt-b small{font-weight:600;color:var(--pista-d)}
+.sr-fmt-b[aria-pressed="true"]{background:var(--pista);border-color:var(--pista-d)}
+.sr .res-added{margin:8px 0 0;font-size:.88rem;color:var(--pista-d);font-weight:700;min-height:0}
+.sr-sil{display:grid;grid-template-columns:130px minmax(0,1fr);gap:14px;align-items:center;margin:14px 0 0;padding:14px 18px;border-radius:var(--r-m);background:var(--pista-l)}
+.sr-sil[data-cat="mince"],.sr-sil[data-cat="ronde"]{background:#F6E6D3}
+.sr-sil-pic{width:100%;height:auto}
+.sr-sil-l{margin:0;font:600 1.2rem/1.2 var(--display);color:var(--ink)}
+.sr-sil-tip{margin:4px 0 0;font-size:.94rem}
+.sr-note{margin:6px 0 0;font-size:.8rem;color:var(--muted)}
+.sr-extra{margin:14px 0 4px;padding:14px 18px;border-radius:var(--r-m);background:#fff;border:1px dashed rgba(74,36,16,.18)}
+.sr-extra h4{margin:0 0 10px;font:600 1.05rem var(--display);color:var(--ink)}
+.sr-extra-b{display:grid;grid-template-columns:80px minmax(0,1fr);gap:14px;align-items:start}
+.sr-extra-b img{width:100%;height:auto;max-height:110px;object-fit:contain}
+.sr-extra-n{margin:0;font-weight:800;color:var(--ink)}
+.sr-extra-n span{margin-left:6px;font-weight:700;color:var(--accent-d)}
+.sr-extra-w,.sr-extra-q{margin:4px 0 0;font-size:.9rem}
+.sr-extra-q{margin-bottom:10px;color:var(--muted)}
+.fx-how-l{margin:6px 0;padding-left:18px;font-size:.9rem;display:grid;gap:4px}
+@media (max-width:560px){
+  .sr-bag{grid-template-columns:80px minmax(0,1fr);padding:14px}
+  .sr-bag .sr-add{width:100%}
+  .sr-sil{grid-template-columns:96px minmax(0,1fr);padding:12px 14px}
+  .bcs-live-pic{width:90px}
+}

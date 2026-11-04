@@ -574,15 +574,50 @@
     calc.fx = { seules: { fmt: null }, gourmande: { freq: 'daily', fmt: null, n: 1 }, nomade: { freq: calc.travel === 'souvent' ? 'daily' : 'occ', fmt: null, n: 1 } };
     calc.fxTier = tier;
 
-    var silBase = tier === 'ideal' ? '' : '<p class="fx-sil fx-sil--' + tier + '">' + silTxt + '</p>';
     var PKc = CFG.pates || {};
     var pateHow = pateOptions(r.grams).map(function (o) {
       return '<li>' + esc(o.x.name) + ' (' + esc(o.x.label) + ')&nbsp;: environ ' + Math.round(o.k.grams * o.k.kcalPer100g / 100) + '&nbsp;kcal, soit l’équivalent de ' + o.eq + '&nbsp;g de croquettes. Les jours où il en mange une, retirez ' + o.eq + '&nbsp;g de croquettes.</li>';
     }).join('');
 
+    /* Repère de silhouette : illustration + libellé simple, sans note chiffrée ni diagnostic */
+    var SIL = { mince: { lbl: 'Plutôt mince', pic: 'side-1' }, ideale: { lbl: 'Dans les repères', pic: 'side-2' }, ronde: { lbl: 'Plutôt ronde', pic: 'side-3' } }[cat];
+    var silTip = tier === 'ideal'
+      ? 'Gardez sa ration et pesez-le chaque semaine&nbsp;: elle évolue avec lui.'
+      : tier === 'ajuste'
+        ? 'Pesez-le chaque semaine et parlez-en à votre vétérinaire lors de sa prochaine visite.'
+        : 'Demandez l’avis de votre vétérinaire avant de changer son alimentation.';
+    var silCard = '<section class="sr-sil" data-cat="' + cat + '" aria-labelledby="sr-sil-t">' +
+      '<img class="sr-sil-pic" src="' + BASE + 'assets/bcs/' + SIL.pic + '.webp" alt="" width="520" height="260">' +
+      '<div><p class="sr-k" id="sr-sil-t">Repère de silhouette <span>indicatif</span></p><p class="sr-sil-l">' + SIL.lbl + '</p>' +
+      '<p class="sr-sil-tip">' + silTip + '</p><p class="sr-note">Un repère basé sur vos réponses, pas un diagnostic. Il ne modifie pas la ration estimée.</p></div></section>';
+
+    /* Sac conseillé : format le plus proche de la durée visée, croquettes seules */
+    var bagCard = function (f) {
+      var d = bagDays(f, r.grams);
+      return '<img class="sr-bag-img" src="' + BASE + 'assets/pack/photo/bag' + f.kg + '-front.webp" alt="Sac TeckCare Poulet & Saumon ' + esc(f.label) + '" width="300" height="430">' +
+        '<div class="sr-bag-c"><p class="sr-k">' + (f.id === rec.id ? 'Sac conseillé' : 'Autre format') + '</p>' +
+        '<p class="sr-bag-n">Croquettes Poulet &amp; Saumon · <b>' + esc(f.label) + '</b></p>' +
+        '<p class="sr-bag-p"><b>' + eur(f.price) + '</b> · environ <b>' + d + '&nbsp;jours</b></p>' +
+        '<div class="sr-fmt" role="group" aria-label="Format du sac">' + FORMATS.map(function (g) { return '<button type="button" class="sr-fmt-b" data-sr-fmt="' + g.id + '" aria-pressed="' + (g.id === f.id) + '">' + esc(g.label) + (g.id === rec.id ? ' <small>conseillé</small>' : '') + '</button>'; }).join('') + '</div>' +
+        '<button type="button" class="btn btn--primary sr-add" data-sr-add="' + f.id + '">Ajouter ce sac au panier</button>' +
+        '<p class="res-added" role="status" aria-live="polite"></p></div>';
+    };
+    calc.srBag = bagCard;
+
+    /* Un seul complément : nomade si sorties ou voyages fréquents, sinon gourmande */
+    var popts = pateOptions(r.grams), pk = calc.travel === 'souvent' ? 'pate-nomade-100g' : 'pate-gourmande-80g';
+    var po = popts.filter(function (o) { return o.id === pk; })[0];
+    var extraCard = !po ? '' :
+      '<section class="sr-extra" aria-labelledby="sr-extra-t"><h4 id="sr-extra-t">Pour compléter sa gamelle</h4>' +
+      '<div class="sr-extra-b"><img src="' + BASE + po.x.img + '" alt="' + esc(po.x.name + ' ' + po.x.label) + '" width="160" height="200" loading="lazy">' +
+      '<div><p class="sr-extra-n">' + esc(po.k.label) + ' ' + esc(po.x.label) + ' <span>' + eur(po.x.price) + '</span></p>' +
+      '<p class="sr-extra-w">' + (pk === 'pate-nomade-100g' ? 'Il vous suit souvent en sortie ou en voyage&nbsp;: une gourde prête à servir, facile à emporter.' : 'Une barquette à mélanger à ses croquettes pour varier ses repas.') + '</p>' +
+      '<p class="sr-extra-q">Le jour où vous la lui donnez, retirez environ <b>' + po.eq + '&nbsp;g de croquettes</b>, soit ' + po.rest + '&nbsp;g ce jour-là.</p>' +
+      '<button type="button" class="btn btn--ghost btn--sm" data-sr-pate="' + po.id + '">Ajouter</button><p class="res-added" role="status" aria-live="polite"></p></div></div></section>';
+
     var title = nm ? 'La gamelle de <span class="js-pup">' + esc(nm) + '</span>' : 'Sa gamelle';
     var html =
-      '<div class="result fx fx-sheet">' +
+      '<div class="result fx fx-sheet sr">' +
       '<header class="fs-head"><h3 class="result-title">' + title + '</h3>' +
       '<p class="fs-prof">' + age + '&nbsp;mois · ' + fmtWeight(w) + '&nbsp;kg' + (calc.variety && VAR[calc.variety] ? ' · Teckel ' + VAR[calc.variety] : '') + ' · <button type="button" class="btn btn--text fx-edit" data-edit-recap>Modifier</button></p></header>' +
       '<section class="fs-main" aria-label="Sa ration">' +
@@ -590,28 +625,22 @@
       '<img class="bowl-img" src="' + BASE + 'assets/bowl-full.webp" width="560" height="329" alt="">' +
       '<div class="bowl-pile"></div>' +
       '<svg class="bowl-label" viewBox="0 0 560 329" aria-hidden="true"><path id="bowl-arc-res" d="M60 160 Q280 234 500 160" fill="none"/><text text-anchor="middle"><textPath href="#bowl-arc-res" startOffset="50%">' + esc((nm || 'Sa gamelle').toUpperCase()) + '</textPath></text></svg></div>' +
-      '<div class="fs-rat"><p class="fs-big"><b>' + r.grams + '&nbsp;g</b> par jour</p>' +
-      '<p class="fs-meals">' + r.meals + ' repas d’environ ' + r.perMeal + '&nbsp;g, en croquettes seules</p>' +
+      '<div class="fs-rat"><p class="sr-k">Ration quotidienne estimée</p><p class="fs-big"><b>' + r.grams + '&nbsp;g</b> par jour</p>' +
+      '<p class="fs-meals"><b>' + r.meals + ' repas</b> d’environ <b>' + r.perMeal + '&nbsp;g</b></p>' +
       '<p class="fx-sec">Estimation indicative, à ajuster avec <span class="nw"><a href="#veterinaires" class="step-link" data-vet-link>notre vétérinaire partenaire</a>.</span></p></div>' +
       '</section>' +
-      silBase +
-      '<section class="fx-menu fp" id="fx-menu" aria-labelledby="fx-menu-t"></section>' +
-      '<section class="fs-rem" id="fx-rem" aria-live="polite"></section>' +
-      '<details class="fx-more" id="fx-more"><summary>Voir les autres options</summary>' +
-      '<p class="fx-intro">Croquettes seules ou accompagnées de pâtée&nbsp;: comparez les options.</p>' +
-      '<div class="fx-cards" id="fx-cards"></div></details>' +
-      '<section class="fx-choice" id="fx-choice" hidden></section>' +
-      '<details class="result-how fx-acc"><summary>Sa silhouette</summary>' +
-      '<p class="fx-sil-t">' + silTxt + '</p>' + advice.replace(/^<p class="res-sil[^>]*>[\s\S]*?<\/p>/, '') + bcsBlock(b) + vetBlock + '</details>' +
-      '<details class="result-how fx-acc"><summary>Comprendre le résultat</summary>' +
+      '<section class="sr-bag" id="sr-bag" aria-label="Sac conseillé">' + bagCard(rec) + '</section>' +
+      silCard +
+      extraCard +
+      '<details class="result-how fx-acc"><summary>Sa silhouette en détail</summary>' +
+      '<p class="fx-sil-t">' + silTxt + '</p>' + advice.replace(/^<p class="res-sil[^>]*>[\s\S]*?<\/p>/, '') + vetBlock + '</details>' +
+      '<details class="result-how fx-acc"><summary>Comprendre le calcul</summary>' +
       '<ol class="fx-how">' +
       '<li><span class="fx-how-i" aria-hidden="true">🐾</span><p><b>Son énergie de base</b>À ' + fmtWeight(w) + '&nbsp;kg, il dépense environ ' + Math.round(r.rer) + '&nbsp;kcal par jour au repos.</p></li>' +
       '<li><span class="fx-how-i" aria-hidden="true">🌱</span><p><b>Le bonus croissance</b>À ' + age + '&nbsp;mois, il grandit encore&nbsp;: × ' + String(r.factor).replace('.', ',') + ', soit ' + Math.round(r.kcal) + '&nbsp;kcal par jour.</p></li>' +
-      '<li><span class="fx-how-i" aria-hidden="true">🥣</span><p><b>Dans sa gamelle</b>Converti en croquettes, cela fait ' + r.grams + '&nbsp;g par jour.</p></li>' +
-      '</ol>' +
-      (pateOptions(r.grams).length ? '<p class="fx-how-n">Une pâtée remplace une partie des croquettes à calories égales&nbsp;: ' + pateOptions(r.grams).map(function (o) { return '1 ' + o.unit + ' = ' + o.eq + '&nbsp;g'; }).join(', ') + '.</p>' : '') +
-      '<div id="fx-score-how"></div>' +
-      '<p class="fx-how-n">Pesez-le chaque semaine&nbsp;: sa ration évolue avec lui.</p></details>' +
+      '<li><span class="fx-how-i" aria-hidden="true">🥣</span><p><b>Dans sa gamelle</b>Converti en croquettes, cela fait ' + r.grams + '&nbsp;g par jour, en ' + r.meals + ' repas.</p></li>' +
+      '</ol><p class="fx-how-n">Le sac conseillé est le format dont la durée se rapproche le plus de ' + R.targetBagDays + '&nbsp;jours avec cette ration. Le repère de silhouette ne change pas ce calcul.</p></details>' +
+      (pateHow ? '<details class="result-how fx-acc"><summary>Les pâtées et sa ration</summary><p class="fx-how-n">Une pâtée remplace une partie des croquettes, à calories égales&nbsp;:</p><ul class="fx-how-l">' + pateHow + '</ul><p class="fx-how-n">Votre rappel de fin de sac reste calculé sur la ration en croquettes seules.</p></details>' : '') +
       '<div class="result-links"><button type="button" class="btn btn--text" data-edit>← Retour</button></div>' +
       '</div>';
 
@@ -650,7 +679,6 @@
 
     // animations d'affichage
     setResFormat(rec.id);
-    fxRender();
     var h = $('.result-title', box); if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
     scrollUnderHeader(card);
 
@@ -680,7 +708,8 @@
     if (b) {
       box.style.setProperty('--s', b.score);
       box.setAttribute('data-cat', b.shape);
-      $('#bcs-live-txt').innerHTML = 'Merci&nbsp;! Ses réponses sont notées, vous verrez nos conseils à l’étape suivante.';
+      var L = { mince: ['Plutôt mince', 'side-1'], ideale: ['Dans les repères', 'side-2'], ronde: ['Plutôt ronde', 'side-3'] }[b.shape];
+      $('#bcs-live-txt').innerHTML = '<img class="bcs-live-pic" src="' + BASE + 'assets/bcs/' + L[1] + '.webp" alt="" width="520" height="260"><span><span class="bcs-live-k">Repère indicatif</span><b>' + L[0] + '</b><small>D’après vos réponses, sans diagnostic. Nos conseils suivent à l’étape suivante.</small></span>';
     } else {
       $('#bcs-live-txt').textContent = answered ? 'Encore ' + (3 - answered) + ' question' + (3 - answered > 1 ? 's' : '') + '…' : 'Répondez aux trois questions pour voir son estimation.';
     }
@@ -995,6 +1024,12 @@
         return;
       }
       if (t.closest('[data-res-cart]')) { openCart(); return; }
+      var srf = t.closest('[data-sr-fmt]');
+      if (srf && calc.srBag) { var fid = srf.getAttribute('data-sr-fmt'), bx = $('#sr-bag'); if (bx) bx.innerHTML = calc.srBag(fmtById(fid)); setResFormat(fid); track('formula_chosen', { format: fid, from: 'result' }); var nb = bx && bx.querySelector('[data-sr-fmt="' + fid + '"]'); if (nb) nb.focus(); return; }
+      var sra = t.closest('[data-sr-add]');
+      if (sra) { var af = fmtById(sra.getAttribute('data-sr-add')); addToCart(af.id, 1, 'result_bag', true); var m1 = sra.parentNode.querySelector('.res-added'); if (m1) m1.innerHTML = '✓ Sac de ' + esc(af.label) + ' ajouté au panier. <button type="button" class="btn btn--text btn--sm" data-res-cart>Voir le panier</button>'; return; }
+      var srp = t.closest('[data-sr-pate]');
+      if (srp) { var pf = fmtById(srp.getAttribute('data-sr-pate')); addToCart(pf.id, 1, 'result_complement', true); var m2 = srp.parentNode.querySelector('.res-added'); if (m2) m2.innerHTML = '✓ ' + esc(pf.name) + ' ajoutée au panier. <button type="button" class="btn btn--text btn--sm" data-res-cart>Voir le panier</button>'; return; }
       var mxb = t.closest('[data-mix]'); if (mxb) { setMix(mxb.getAttribute('data-mix')); return; }
       if (t.closest('[data-mix-off]')) { setMix(null); return; }
       var ch = t.closest('[data-choose-bag]');

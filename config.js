@@ -35,7 +35,7 @@ window.TECKCARE_CONFIG = {
      Chaque expérience ne modifie qu'UN élément repéré dans le HTML par
      data-exp="<identifiant>". Forcer une variante pour vérifier : ?ab=B     */
   experiments: {
-    active: "hero_cta_label",
+    active: null, /* test du libellé terminé : le bouton affiche « Préparer sa gamelle » */
     definitions: {
       hero_cta_label: {
         description: "Libellé du bouton du champ prénom (hero)",
